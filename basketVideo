@@ -1,0 +1,354 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+# -*- coding: utf-8 -*-
+# -*- tabstop: 4 -*-
+
+'''
+ This program source code file is part of videoBasket, a video download GUI
+ application.
+ 
+ Copyright  © 2015 by LordBlick (at) gmail.com
+ 
+ This program is free software; you can redistribute mn and/or
+ modify mn under the terms of the GNU General Public License
+ as published by the Free Software Foundation; either version 2
+ of the License, or (at your option) any later version.
+ 
+ This program is distributed in the hope that mn will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, you may find one here:
+ http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ or you may search the http://www.gnu.org website for the version 2 license,
+ or you may write to the Free Software Foundation, Inc.,
+ 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
+'''
+
+from os import path as ph, getcwd as pwd, remove as rm, rename as mv
+import re
+from subprocess import Popen, PIPE, STDOUT
+from shlex import split as shsp
+
+txtTargets = 'UTF8_STRING STRING COMPOUND_TEXT TEXT _NETSCAPE_URL text/plain'
+txtTargets += ' text/plain;charset=utf-8 text/uri-list text/x-moz-url'
+lsTargets = txtTargets.split(' ')
+enumTargets = range(80, 80+len(lsTargets))
+lsDragAndDrop = [(s, 0, n) for s, n in zip(lsTargets, enumTargets)]
+from uiVideoBasket import gtk, wg
+#_dbg = wg._dbg
+from clIniFile import _p
+import clIniFile
+clIniFile.dbg = True
+_dbg = clIniFile._dbg
+class videoBasket:
+	def __init__(mn):
+		mn.uiInit()
+		mn.appStart()
+		gtk.gdk.threads_init()
+		gtk.threads_enter()
+		gtk.main()
+		gtk.threads_leave()
+
+	uiFn = lambda mn, fileName: fileName.replace(ph.expanduser('~'), '~')
+
+	def set_drag(mn, w):
+		w.drag_dest_set(gtk.DEST_DEFAULT_MOTION|gtk.DEST_DEFAULT_HIGHLIGHT|gtk.DEST_DEFAULT_DROP,
+			lsDragAndDrop, gtk.gdk.ACTION_COPY)
+
+	def uiInit(mn):
+		from uiVideoBasket import videoBasketUI
+		ui = mn.ui = videoBasketUI()
+		gdk = gtk.gdk
+		ui.mainWindow.connect("destroy", lambda xargs: mn.Exit())
+		mn.set_drag(ui.tvUrls)
+		mn.set_drag(ui.logView)
+		ui.tvUrls.connect("drag-motion", mn.dragMotion)
+		ui.logView.connect("drag-motion", mn.dragMotion)
+		ui.tvUrls.connect("drag_data_received", mn.dragReceived)
+		ui.logView.connect("drag_data_received", mn.dragReceived)
+		ui.txtAddURL.connect("activate", mn.appAddURL)
+		ui.buttonAddURL.connect("clicked", lambda xargs: mn.appAddURL(ui.txtAddURL))
+		ui.buttonReload.connect("clicked", lambda xargs: mn.appReload())
+		ui.lsLimit.append( ("No limit", 0) )
+		for res_limit in(144, 240, 360, 480, 720, 1080):
+			ui.lsLimit.append( ("%ip"% res_limit, res_limit) )
+		ui.cbLimit.connect("changed", mn.appChangeLimit)
+		ui.buttonClear.connect("clicked", lambda xargs: mn.appClear())
+		ui.buttonExit.connect("clicked", lambda xargs: mn.Exit())
+
+	def appChangeLimit(mn, cb):
+		idx = cb.get_active()
+		if idx > -1:
+			mn.cfg['Main']['resolutionLimit'] = "%i" % cb.get_model()[idx][1]
+
+	def appClear(mn):
+		mn.ui.logView.clear_text()
+		mn.lastData = None
+
+	def dragMotion(mn, widget, context, x, y, timestamp):
+		ui = mn.ui
+		if not(ui.mainWindow.is_active()):
+			ui.mainWindow.present()
+		gdk = gtk.gdk
+		_dbg(':'.join([str(t) for t in context.targets])+'\n')
+		context.drag_status(gdk.ACTION_COPY, timestamp)
+		# Returning True which means "I accept this data".
+		return True
+
+	def appStartThread(mn, threadCall):
+		#import youtube_dl
+		import thread
+		thread.start_new_thread(threadCall, ())
+
+	def urlDetect(mn, textIn):
+		from urllib import unquote as unqt
+		ui = mn.ui
+		textOut = Engine = ''
+		mQuotedURL = mn.reQuotedURL.match(textIn)
+		if mQuotedURL:
+			textIn = unqt(mQuotedURL.group('ENC_URL'))
+		mYouTubeURLvid = mn.reYouTubeURLvid.match(textIn)
+		mYouTubeURLwatch = mn.reYouTubeURLwatch.match(textIn)
+		mFacebookURLvid = mn.reFacebookURLvid.match(textIn)
+		mVimeoURLvid = mn.reVimeoURLvid.match(textIn)
+		mDailyURLvid = mn.reDailyURLvid.match(textIn)
+		mDirectMedia = mn.reDirectMedia.match(textIn)
+		mYouTubeURL = (mYouTubeURLvid if mYouTubeURLvid else mYouTubeURLwatch)
+		if mYouTubeURL or(mFacebookURLvid) or(mVimeoURLvid) or(mDailyURLvid) or(mDirectMedia):
+			#ui.logView.insert_end(u"Trying'%s'…\n" % textIn)
+			if mYouTubeURL:
+				URLvidID=mYouTubeURL.group('WatchId')
+				textOut = "https://www.youtube.com/watch?v="
+				Engine = 'Youtube'
+			elif mFacebookURLvid:
+				URLvidID=mFacebookURLvid.group('WatchId')
+				textOut = "https://www.facebook.com/video.php?v="
+				Engine = 'Facebook'
+			elif mVimeoURLvid:
+				URLvidID=mVimeoURLvid.group('WatchId')
+				textOut = "https://vimeo.com/"
+				Engine = 'Vimeo'
+			elif mDailyURLvid:
+				URLvidID=mDailyURLvid.group('WatchId')
+				textOut = "https://dailymotion.com/video/"
+				Engine = 'Daily'
+			elif mDirectMedia:
+				textOut = mDirectMedia.group('Url')
+				Engine = 'lftp'
+			if Engine not in('lftp',):
+				textOut += URLvidID.replace('\xc2\xad', '')
+		else:
+			ui.logView.insert_end(u"Unrecognized text:'%s',\n\tdropping to Yotube-dl…\n" % textIn)
+			Engine = 'Youtube'
+			textOut = textIn
+		#ui.logView.insert_end("url:'%s'\n" % textOut)
+		return textOut, Engine
+
+	def extractResolution(mn, txt):
+		if 'x' in txt:
+			txt = txt.split('x')[1]
+		if txt.endswith('p'):
+			txt = txt[:-1]
+		if txt.isdigit():
+			return int(txt)
+		return 0
+
+	def downloadThread(mn):
+		_dbg("Thread started…\n")
+		from time import sleep
+		from os import chdir as cd, environ as env, setsid
+		from psutil import Process
+		if mn.procTask == None or mn.procTask.poll() != None: # poll()==None means still running
+			ui = mn.ui
+			gtk.threads_enter()
+			_dbg("Thread pass#0\n")
+			try:
+				lsUrls = ui.tvUrls.get_model()
+			finally:
+				gtk.threads_leave()
+			_dbg("Thread pass#1\n")
+			while len(lsUrls):
+				url = ''
+				gtk.threads_enter()
+				try:
+					Iter0 = lsUrls.get_iter_first()
+					Engine, url = lsUrls.get(Iter0, 0, 1)
+					lsUrls.remove(Iter0)
+					resolutionLimit = ui.lsLimit[ui.cbLimit.get_active()][1]
+				finally:
+					gtk.threads_leave()
+				_dbg("Thread pass#2\n")
+				if url:
+					cmd = ''
+					if resolutionLimit and(not(Engine in('lftp',))):
+						cmd = 'youtube-dl --verbose '
+						retcode, output, stderr = mn.call("youtube-dl -F '%s'" % url)
+						if retcode==0:
+							lines = list(reversed(map(lambda s: s.strip(), output.splitlines())))
+							while True:
+								if not(len(lines)):
+									break
+								if mn.reResInfoHead.match(lines[-1]):
+									lines.pop()
+									break
+								lines.pop()
+							lines = sorted([line for line in map(lambda s: s.split(None, 3), lines)
+								if mn.extractResolution(line[2])<=resolutionLimit],
+								key=lambda x: (mn.extractResolution(x[2]), -int(x[0])), reverse=True)
+							_dbg("limit: %i\nlines:\n%s" % (resolutionLimit, '\n'.join([' | '.join(line) for line in lines])+'\n'))
+							cmd += "-f %s " % lines[0][0]
+							cmd += "'%s'" % url
+					else:
+						cmd = ("youtube-dl --verbose '%s'", "lftp -c pget '%s'")[Engine in('lftp',)] % url
+					cd(ph.expanduser('~/tmp'))
+					gtk.threads_enter()
+					try:
+						ui.logView.insert_end("> %s\n" % cmd)
+					finally:
+						gtk.threads_leave()
+					if cmd:
+						mn.procTask = Popen(shsp(cmd),
+							stderr=PIPE,
+							stdout=mn.pty_child_fd, preexec_fn=setsid)
+						mn.procTask.children = None
+						mn.procTask.diry = dir(mn.procTask)
+						try:
+							p = Process(mn.procTask.pid)
+							mn.procTask.children = p.get_children(recursive=True)
+						except:
+							pass
+						while mn.procTask.poll() == None: # poll()==None means still running
+							sleep(.5)
+					gtk.threads_enter()
+					try:
+						ui.logView.insert_end("Done: %s\n" % cmd)
+						ui.buttonReload.set_sensitive(mn.cfg['Main'].has_key('lastDropedURLs'))
+					finally:
+						gtk.threads_leave()
+			mn.procTask = None
+			cd(ph.dirname(ph.abspath(__file__)))
+			_dbg("Thread exit.\n")
+
+	def call(mn, cmd):
+		proc = Popen(
+			shsp(cmd),
+			stdout=PIPE,
+			stderr=PIPE)
+		result, stderr = proc.communicate()
+		return proc.returncode, result, stderr
+
+	def appendURL(mn, uri):
+		ui = mn.ui
+		try:
+			url, Engine = mn.urlDetect(uri.decode('utf-8'))
+		except Exception, e:
+			ui.logView.insert_end(e.message)
+			return True
+		if url and(Engine):
+			mn.cfg['Main']['lastDropedURLs'] = url
+			lsUrls = ui.tvUrls.get_model()
+			lsUrls.append( (Engine, url, "%s: '%s'" % (Engine, url)) )
+			if mn.procTask == None or(mn.procTask.poll()!=None):
+				mn.appStartThread(mn.downloadThread)
+		else:
+			mn.cfg['Main'].remove('lastDropedURLs')
+		ui.buttonReload.set_sensitive(mn.cfg['Main'].has_key('lastDropedURLs'))
+
+	def dragReceived(mn, widget, context, x, y, selection, target_type, timestamp):
+		if target_type in enumTargets:
+			mn.appendURL(selection.data.strip('\r\n\x00'))
+		return True
+
+	def appAddURL(mn, ed):
+		mn.appendURL(ed.get_text())
+
+	def appReload(mn):
+		if mn.cfg['Main'].has_key('lastDropedURLs'):
+			mn.appendURL(mn.cfg['Main']['lastDropedURLs'])
+
+	def appStart(mn):
+		ui = mn.ui
+		mn.lastData = None
+		mn.appCfgLoad()
+		selLimit = mn.cfg['Main']['resolutionLimit']
+		if not(selLimit):
+			selLimit = 0
+		else:
+			selLimit = int(selLimit)
+		lsID = map(lambda row: row[1], ui.lsLimit)
+		if selLimit in lsID:
+			rowId = lsID.index(selLimit)
+			ui.cbLimit.set_active(rowId)
+		ui.buttonReload.set_sensitive(bool(mn.cfg['Main']['lastDropedURLs']))
+		mn.reQuotedURL = re.compile('.*((facebook.com/l/[^/]+/)|([/&?](((img)?u(rl)?)|(out|q)|(ref))=))(?P<ENC_URL>https?[^&]+).*$', re.I | re.U)
+		#https://www.youtube.com/watch_videos?title=Popularne+filmy&video_ids=hXozr9H2c0c%2CIXNw9pPSMYc%2CuG_5m5Qdhck%2C3W6s94k3Cz4%2C-ShR6pyGOKc%2C32LvoYhxlF0%2Czkpop_FXkKc%2CTlbX5tanHos%2CgoAklkwIEHY%2CJ6GAOuEHNK4%2Cxkv3oncJX5M%2CNhOcninORnw&feature=c4-overview&type=0&more_url=
+		mn.reYouTubeURLvid = re.compile('.*((youtube.com/((.*[&?]v=)|(v/)))|(youtu.be/))(?P<WatchId>[^&?# ]+).*$', re.I | re.U)
+		mn.reYouTubeURLwatch = re.compile('.*((watch\?v=)|(watch_videos\?(.*&)?video_ids=))(?P<WatchId>[^&?%# ]+).*$', re.I | re.U)
+		mn.reFacebookURLvid = re.compile('.*facebook.com/.*((video(\.php)?[&?]v=)|(/videos/(vb\.\d+/)?))(?P<WatchId>[^&?# /]+).*$', re.I | re.U)
+		#/dima.degtyar.5/videos/1528526177378990/
+		mn.reVimeoURLvid = re.compile('.*vimeo.com/(?P<WatchId>\d+)', re.I | re.U)
+		mn.reDailyURLvid = re.compile('.*((dai.ly)|(dailymotion.com/video))/(?P<WatchId>\w+)', re.I | re.U)
+		mn.reDirectMedia = re.compile('(?P<Url>http://.*\..*/.*\.mp[1-4])', re.I | re.U)
+		mn.reResInfoHead = re.compile('format\s+code\s+extension\s+resolution\s+note', re.I | re.U)
+		from gobject import IO_IN as ioIN, IO_HUP as ioHUP, io_add_watch as addWatch
+		import pty, fcntl, os
+		mn.pty_parent_fd, mn.pty_child_fd = pty.openpty()
+		mn.fd = os.fdopen(mn.pty_parent_fd, 'r')
+		file_flags = fcntl.fcntl(mn.fd, fcntl.F_GETFL)
+		fcntl.fcntl(mn.fd, fcntl.F_SETFL, file_flags|os.O_NDELAY)
+		mn.bufRN = ''
+		mn.dcTimePerf={}
+		mn.txtBfSchFlags = gtk.TEXT_SEARCH_TEXT_ONLY | gtk.TEXT_SEARCH_VISIBLE_ONLY
+		mn.tickID = None
+		mn.watchID = addWatch(mn.fd, ioIN, ui.vt.logWrite)
+		mn.procTask = None
+
+	def appStop(mn):
+		fileData = mn.ui.logView.get_text()
+		mn.appCfgStore()
+		from gobject import source_remove as unWatch
+		unWatch(mn.watchID)
+
+	def Exit(mn):
+		print("Exiting...\n")
+		mn.appStop()
+		gtk.main_quit()
+
+	def appCfgLoad(mn):
+		ui = mn.ui
+		mn.cfg = clIniFile.IniSections()
+		rfn = ph.expanduser(__file__)
+		cfgBase = ph.dirname(ph.abspath(rfn))+'/'+ ph.basename(rfn)
+		mn.old_cfg_fn = cfgBase+'.conf'
+		cfg_fn = cfgBase+'.ini'
+		_p("Config base: '%s'\n" % cfgBase)
+		if ph.isfile(cfg_fn):
+			mn.cfg.load(cfg_fn)
+			_p("Loaded Config file: '%s'\n" % (cfg_fn))
+		if not(len(mn.cfg)) and(ph.isfile(mn.old_cfg_fn)):
+			mn.cfg.load_old_cfg(mn.old_cfg_fn)
+			_p("Config file: '%s'\n" % (mn.old_cfg_fn))
+			_p("→New Config file: '%s'\n" % (cfg_fn))
+		mn.cfg.filename = cfg_fn
+		mn.lastcfg = mn.cfg['Main'].copy(), mn.cfg['UI'].copy()
+		from dlgEngine import DialogEngine
+		ui.cfg = mn.cfg['UI']
+		ui.dlgEngine = DialogEngine(ui)
+		ui.restoreGeometry()
+
+	def appCfgStore(mn):
+		ui = mn.ui
+		ui.storeGeometry()
+		if not(mn.cfg['Main']['FindPath']):
+			mn.cfg['Main'].remove('FindPath')
+		if mn.lastcfg!=(mn.cfg['Main'], mn.cfg['UI']):
+			mn.cfg.section_place('Main', 0)
+			mn.cfg.store()
+
+
+# Entry point
+if __name__ == "__main__":
+	videoBasket()
