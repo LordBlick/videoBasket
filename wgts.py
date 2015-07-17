@@ -59,66 +59,87 @@ def putScroll(hFixed, widget, posX, posY, width, height):
 	hFixed.put(hScroll, posX, posY)
 	return hScroll
 
-def Label(txtLabel, hFixed, posX, posY, width, height=None, fontDesc=None, xalign=None, selectable=False):
-	hLabel = gtk.Label(txtLabel)
-	if fontDesc:
-		hLabel.modify_font(fontDesc)
-	if type(xalign)==float and(0.<=xalign<=1.):
-		yalign = hLabel.get_alignment()[1]
-		hLabel.set_alignment(xalign, yalign)
-	if type(selectable)==bool:
-		hLabel.set_selectable(selectable)
-	hLabel.show()
-	if not height:
-		height=Height
-	hLabel.set_size_request(width, height)
-	if hFixed:
-		hFixed.put(hLabel, posX, posY)
-	return hLabel
+class MvWg:
+	"This is abctract class !"
+	def __init__(it, *args):
+		raise TypeError('MvWg.__init__(): abstract class')
 
-def Butt(txtLabel, hFixed, posX, posY, width, height=None, fileImage=None, stockID=None, fontDesc=None):
+	def move(it, x, y):
+		it.hFixed.move(it, x, y)
+
+class Label(gtk.Label, MvWg):
+	def __init__(it, txtLabel, hFixed, posX, posY, width, height=None, fontDesc=None, xalign=None, selectable=False):
+		it.hFixed = hFixed
+		super(it.__class__, it).__init__(txtLabel) # gtk.Label
+		if fontDesc:
+			it.modify_font(fontDesc)
+		if type(xalign)==float and(0.<=xalign<=1.):
+			yalign = it.get_alignment()[1]
+			it.set_alignment(xalign, yalign)
+		if type(selectable)==bool:
+			it.set_selectable(selectable)
+		it.show()
+		if not height:
+			height=Height
+		it.set_size_request(width, height)
+		if hFixed:
+			hFixed.put(it, posX, posY)
+
+class Butt(gtk.Button, MvWg):
 	"""If stockID is set, txtLabel set as True means full stock button,
 	non-null string - own Label for stock image,
 	in other case - button with only stock image"""
-	if stockID == None and fileImage == None:
-		hButt = gtk.Button(label=txtLabel, use_underline=False)
-		if fontDesc:
-			hLabel = hButt.child
-			hLabel.modify_font(fontDesc)
-	else:
-		if type(txtLabel)==int or type(txtLabel)==float or type(txtLabel)==type(None) or (type(txtLabel)==str and txtLabel==''):
-			txtLabel = bool(txtLabel)
-		if type(txtLabel)==bool and txtLabel==True or type(txtLabel)==str:
-			if stockID:
-				hButt = gtk.Button(stock=stockID)
-			elif fileImage:
-				image = gtk.Image()
-				image.set_from_file(fileImage)
-				hButt = gtk.Button()
-				hButt.add(image)
-			if type(txtLabel)==str:
-				hLabel = hButt.get_children()[0].get_children()[0].get_children()[1]
-				hLabel.set_text(txtLabel)
-				if fontDesc:
-					hLabel.modify_font(fontDesc)
+	def __init__(it, txtLabel, hFixed, posX, posY, width, height=None, fileImage=None, stockID=None, fontDesc=None):
+		it.hFixed = hFixed
+		if stockID == None and fileImage == None:
+			super(it.__class__, it).__init__(label=txtLabel, use_underline=False)
+			if fontDesc:
+				btLabel = it.child
+				btLabel.modify_font(fontDesc)
 		else:
-			image = gtk.Image()
-			if stockID:
-				image.set_from_stock(stockID, gtk.ICON_SIZE_BUTTON)
-			elif fileImage:
-				image.set_from_file(fileImage)
-			hButt = gtk.Button()
-			hButt.add(image)
-	if not height:
-		height = Height
-	hButt.set_size_request(width, height)
-	hFixed.put(hButt, posX, posY)
-	return hButt
+			if type(txtLabel)==int or type(txtLabel)==float or type(txtLabel)==type(None) or (type(txtLabel)==str and txtLabel==''):
+				txtLabel = bool(txtLabel)
+			if type(txtLabel)==bool and txtLabel==True or type(txtLabel)==str:
+				if stockID:
+					super(it.__class__, it).__init__(stock=stockID)
+				elif fileImage:
+					image = gtk.Image()
+					image.set_from_file(fileImage)
+					super(it.__class__, it).__init__()
+					it.add(image)
+				if type(txtLabel)==str:
+					btLabel = it.get_children()[0].get_children()[0].get_children()[1]
+					btLabel.set_text(txtLabel)
+					if fontDesc:
+						btLabel.modify_font(fontDesc)
+			else:
+				image = gtk.Image()
+				if stockID:
+					image.set_from_stock(stockID, gtk.ICON_SIZE_BUTTON)
+				elif fileImage:
+					image.set_from_file(fileImage)
+				super(it.__class__, it).__init__()
+				it.add(image)
+		if not height:
+			height = Height
+		it.set_size_request(width, height)
+		hFixed.put(it, posX, posY)
+
+class Check(gtk.CheckButton, MvWg):
+	def __init__(it, txtLabel, hFixed, posX, posY, width, height=None, fontDesc=None):
+		it.hFixed = hFixed
+		super(it.__class__, it).__init__(label=txtLabel, use_underline=False)
+		if fontDesc:
+			it.child.modify_font(fontDesc)
+		if not height:
+			height = Height
+		it.set_size_request(width, height)
+		hFixed.put(it, posX, posY)
 
 class ComboBox(gtk.ComboBox):
 	def __init__(it, modelCb, hFixed, posX, posY, width, height=None, fontDesc=None, wrap=None, selTxt=0):
-		super(gtk.ComboBox, it).__init__()
 		it.hFixed = hFixed
+		super(it.__class__, it).__init__()
 		cellRendr = gtk.CellRendererText()
 		if fontDesc:
 			cellRendr.set_property('font-desc', fontDesc)
@@ -137,29 +158,30 @@ class ComboBox(gtk.ComboBox):
 	def move(it, x, y):
 		it.hFixed.move(it, x, y-2)
 
-def Entry(hFixed, posX, posY, width, height=None, startIco=None, clearIco=False, bEditable=True, fontDesc=None):
-	def entryIcoClr(ed, icoPos, sigEvent):
-		if icoPos == gtk.ENTRY_ICON_SECONDARY:
-			ed.set_text('')
-	hEntry = gtk.Entry()
-	if fontDesc:
-		hEntry.modify_font(fontDesc)
-	if startIco:
-		textInput.set_icon_from_pixbuf(0, startIco)
-	if clearIco:
-		hEntry.set_icon_from_stock(1, gtk.STOCK_CLOSE)
-		hEntry.set_icon_tooltip_text (1, 'Clear')
-		hEntry.connect("icon-release", entryIcoClr)
-	hEntry.set_property("editable", bool(bEditable))
-	if not height:
-		height = Height
-	hEntry.set_size_request(width, height)
-	hFixed.put(hEntry, posX, posY)
-	return hEntry
+class Entry(gtk.Entry, MvWg):
+	def __init__(it, hFixed, posX, posY, width, height=None, startIco=None, clearIco=False, bEditable=True, fontDesc=None):
+		def entryIcoClr(ed, icoPos, sigEvent):
+			if icoPos == gtk.ENTRY_ICON_SECONDARY:
+				ed.set_text('')
+		it.hFixed = hFixed
+		super(it.__class__, it).__init__()
+		if fontDesc:
+			it.modify_font(fontDesc)
+		if startIco:
+			textInput.set_icon_from_pixbuf(0, startIco)
+		if clearIco:
+			it.set_icon_from_stock(1, gtk.STOCK_CLOSE)
+			it.set_icon_tooltip_text (1, 'Clear')
+			it.connect("icon-release", entryIcoClr)
+		it.set_property("editable", bool(bEditable))
+		if not height:
+			height = Height
+		it.set_size_request(width, height)
+		hFixed.put(it, posX, posY)
 
 class TextView(gtk.TextView):
 	def __init__(it, hFixed, posX, posY, width, height, bWrap=False, bEditable=True, tabSpace=2, fontDesc=None):
-		super(gtk.TextView, it).__init__()
+		super(it.__class__, it).__init__()
 		it.hFixed = hFixed
 		it.autoscroll = True
 		it.changed = False
@@ -192,7 +214,7 @@ class TextView(gtk.TextView):
 		if bPass and(isinstance(parent, gtk.ScrolledWindow)):
 			parent.set_size_request(x, y)
 		else:
-			super(gtk.TextView, it).set_size_request(x, y)
+			super(it.__class__, it).set_size_request(x, y)
 
 	def move(it, x, y):
 		try:
@@ -221,7 +243,7 @@ class TextView(gtk.TextView):
 		it.changed = True
 
 	def reScrollV(it, adjV, scrollV):
-		"""Scroll to the bottom of the TextView when the adjustment changes."""
+		'Scroll to the bottom of the TextView when the adjustment changes.'
 		if it.autoscroll:
 			adjV.set_value(adjV.upper - adjV.page_size)
 			scrollV.set_vadjustment(adjV)

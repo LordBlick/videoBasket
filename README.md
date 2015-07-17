@@ -38,3 +38,7 @@ To run it it's nessesary to install:
 
 TO DO:
 - youtube-dl classes integration.
+- destination download dir configurable.
+- separate configuration dialog.
+- free lftp depedency (internal multidownload routine with multithreading Cython)
+- make possible to pack std pypi package

@@ -37,6 +37,7 @@ class videoBasketUI:
 		ui.uiInit()
 		from TextViewVT import VTtext
 		ui.vt = VTtext(ui.logView)
+		ui.dialogsInit()
 		if __name__ == "__main__":
 			ui.mainWindow.connect("destroy", lambda w: gtk.main_quit())
 			ui.buttonExit.connect("clicked", lambda w: gtk.main_quit())
@@ -51,9 +52,9 @@ class videoBasketUI:
 		wg.Height = 25
 		ui.title = 'Basket for videos - drag URLs below…'
 		ui.mainWindow = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		ui.wdhMain, ui.hgtMain = (400, 400)
-		ui.mainWindow.set_geometry_hints(min_width=ui.wdhMain, min_height=ui.hgtMain)
-		ui.mainWindow.set_size_request(ui.wdhMain, ui.hgtMain)
+		w, h = (300, 400)
+		ui.mainWindow.set_geometry_hints(min_width=w, min_height=h)
+		ui.mainWindow.set_size_request(w, h)
 		ui.mainWindow.set_title(ui.title)
 		ui.mainWindow.set_border_width(5)
 		accGroup = gtk.AccelGroup()
@@ -62,7 +63,7 @@ class videoBasketUI:
 
 		#List of Config Memory (Fuses, Lock) Name|ValueHex|TooltipValueBin
 		from gobject import TYPE_STRING as goStr, TYPE_INT as goInt
-		lsUrls = gtk.ListStore(goStr, goStr, goStr)
+		lsUrls = gtk.ListStore(goStr, goStr, goStr, goStr)
 		ui.tvUrls = gtk.TreeView(lsUrls)
 		#tvUrlsSelection = ui.tvUrls.get_selection()
 		#tvUrlsSelection.set_mode(gtk.SELECTION_SINGLE)
@@ -85,6 +86,11 @@ class videoBasketUI:
 		ui.txtAddURL = wg.Entry(ui.mainFrame, 0,  0, 0, clearIco=True)
 		ui.buttonAddURL = wg.Butt("Add URL", ui.mainFrame, 0,  0, 50)
 
+		ui.checkOwnYTdl = wg.Check("Internal YT downloader", ui.mainFrame, 0,  0, 130)
+		ui.labelLimit = wg.Label("Resolution limit:", ui.mainFrame, 0,  0, 80)
+		ui.lsLimit = gtk.ListStore(goStr, goInt)
+		ui.cbLimit = wg.ComboBox(ui.lsLimit, ui.mainFrame, 0, 0, 70)
+
 		ui.logoBigPixbuf = gtk.gdk.pixbuf_new_from_file("pic/video.svg")
 		gtk.window_set_default_icon_list(ui.logoBigPixbuf, )
 		ui.imageLogo = gtk.Image()
@@ -92,10 +98,6 @@ class videoBasketUI:
 		ui.mainFrame.put(ui.imageLogo, 0, 0)
 
 		ui.buttonReload = wg.Butt(None, ui.mainFrame, 0, 0, 30, stockID=gtk.STOCK_REFRESH) #"Read File..."
-
-		ui.labelLimit = wg.Label("Limit resolution to:", ui.mainFrame, 0,  0, 90)
-		ui.lsLimit = gtk.ListStore(goStr, goInt)
-		ui.cbLimit = wg.ComboBox(ui.lsLimit, ui.mainFrame, 0, 0, 70)
 
 		ui.buttonClear = wg.Butt("Clear", ui.mainFrame, 0,  0, 50)
 
@@ -116,24 +118,29 @@ class videoBasketUI:
 				return True
 			ui.lastWinSize = w, h
 			H = wg.Height
-			y = h-65
+			y = h-95
 			h1 = y/2+50
 			h2 = y/2-60
 			ya = h1+5
 			ui.tvUrls.get_parent().set_size_request(w-10, h1)
 			ui.logView.move(0, ya)
 			ui.logView.set_size_request(w-10, h2)
-			ui.mainFrame.move(ui.txtAddURL, 0, y)
+			ui.txtAddURL.move(0, y)
 			ui.txtAddURL.set_size_request(w-65, H)
-			ui.mainFrame.move(ui.buttonAddURL, w-60, y)
+			ui.buttonAddURL.move(w-60, y)
+			y += 30
+			ui.checkOwnYTdl.move(0, y)
+			ui.labelLimit.move(w-165, y)
+			ui.cbLimit.move(w-80, y)
 			y += 30
 			ui.mainFrame.move(ui.imageLogo, 0, y-2)
-			ui.mainFrame.move(ui.buttonReload, 50, y)
-			ui.mainFrame.move(ui.labelLimit, 85, y)
-			ui.cbLimit.move(180, y)
-			ui.mainFrame.move(ui.buttonClear, w-145, y)
-			ui.mainFrame.move(ui.buttonExit, w-90, y)
+			ui.buttonReload.move(50, y)
+			ui.buttonClear.move(w-145, y)
+			ui.buttonExit.move(w-90, y)
 			return True
+
+	def dialogsInit(ui):
+		pass
 
 	def restoreGeometry(ui):
 		ui.rGeo(ui.mainWindow, 'MainWindowGeometry')
