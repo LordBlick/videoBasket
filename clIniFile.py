@@ -35,7 +35,7 @@ _p = lambda _str, tag=None: sto.write(hh(str(_str)))
 dbg = False
 
 def _dbg(_str):
-	if dbg: _p(_str)
+	if dbg: sto.write(str(_str))
 
 class xlist(list):
 	def clear(it):
@@ -90,16 +90,16 @@ class Section(xlist):
 			if idx==ln_max:
 				return idx # end of file
 
-	def get_place(it, name):
+	def get_place(it, key):
 		names = it.keys()
-		if name in names:
-			return names.index(name)
+		if key in names:
+			return names.index(key)
 		return None
 
-	def get_commented_place(it, name):
+	def get_commented_place(it, key):
 		names = map(lambda (key, value): key.lstrip(';'), it)
-		if name in names:
-			return names.index(name)
+		if key in names:
+			return names.index(key)
 		return None
 
 	def __getitem__(it, key):
@@ -135,21 +135,13 @@ class Section(xlist):
 	values = lambda it: xlist(map(lambda (key, value): value, it))
 
 	def place(it, name, value, index=None):
-		if index is None:
-			it[name] = value
-			return
-		elif type(index) is int and(index<len(it)):
-			idx = it.get_place(name)
-			if idx is None:
-				it[idx] = key, value
-				return
-			else:
-				cut_section = it.pop(idx)
+		if type(index) is int and(index<len(it)):
+			old_idx = it.get_place(name)
+			if old_idx is not None:
+				cut_section = it.pop(old_idx)
 				if index<len(it):
-					it.insert(index, cut_section)
-				else:
-					it.append(cut_section)
-				return
+					it.insert(index, cut_section) # Nevermind value, it will be replaced at the end
+		it[name] = value
 
 	def remove(it, name):
 		idx = it.get_place(name)
@@ -185,7 +177,7 @@ class IniSections(xlist):
 		it.filename = ''
 		from sys import _current_frames as _cf
 		callingFilename = _cf().values()[0].f_back.f_code.co_filename
-		it.callDir = ph.dirname(callingFilename)
+		it.callDir = ph.dirname(ph.realpath(callingFilename))
 
 	@classmethod
 	def load_new(cls, file_name, dbg=False):

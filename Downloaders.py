@@ -43,6 +43,7 @@ def _dbg(_str):
 class YoutubeDL:
 	def __init__(it, logger=None, dst_dn=None):
 		it.iddle = True
+		it.downloading = False
 		it.start_time = t_s()
 		it.size = None
 		it.vidid = ''
@@ -51,6 +52,9 @@ class YoutubeDL:
 		it.lenght = it.done = 0
 
 	def go(it, vidid, reslimit):
+		if it.iddle==False:
+			_dbg("Busy")
+			return True # busy
 		it.iddle = False
 		it.done = 0
 		it.vidid = vidid
@@ -66,35 +70,46 @@ class YoutubeDL:
 			data = resp.read()
 			resp.close()
 			info = parse_qs(data)
-			it.title = info['title'][0]
-			_dbg("Downloading %s\n" % it.title)
-			dst_fn = "%s/%s-%s.mp4" % (it.dst_dn, it.title, vidid)
-			stream_map = info['url_encoded_fmt_stream_map'][0]
-			for v_info in stream_map.split(','):
-				item = parse_qs(v_info)
-				tags = 'quality type url'.split()
-				_dbg('\n'.join(map(lambda tag: item[tag][0], tags))+'\n')
-				url = item['url'][0]
-				h_url = urlopen(url)
-				_dbg("%s\n" % h_url.headers)
-				it.lenght = int(h_url.headers['Content-Length'])
-				it.start_time = t_s()
-				it.route_fd(h_url, dst_fn)
-				break
+			if info.has_key('title') and info.has_key('url_encoded_fmt_stream_map'):
+				it.title = info['title'][0]
+				_dbg("Downloading %s\n" % it.title)
+				dst_fn = "%s/%s-%s.mp4" % (it.dst_dn, it.title, vidid)
+				stream_map = info['url_encoded_fmt_stream_map'][0]
+				for v_info in stream_map.split(','):
+					item = parse_qs(v_info)
+					tags = 'quality type url'.split()
+					if not(False in map(lambda key: item.has_key(key), tags)):
+						_dbg('\n'.join(map(lambda tag: item[tag][0], tags))+'\n')
+						url = item['url'][0]
+						try:
+							h_url = urlopen(url)
+						except HTTPError as e:
+							it.logger("\nThe server couldn\'t fulfill the request.\n")
+							it.logger("Error code: %s\n" % str(e.code))
+						except URLError as e:
+							it.logger("\nWe failed to reach a server.\n")
+							it.logger("Reason: %s\n" % str(e.reason))
+						else:
+							_dbg("%s\n" % h_url.headers)
+							lenght = int(h_url.headers['Content-Length'])
+							if lenght:
+								it.lenght = lenght
+								it.start_time = t_s()
+								it.route_fd(h_url, dst_fn)
+								break
 		it.iddle = True
+		return False
 
 	def route_fd(it, h_url, dst_fn):
-			fd = open(dst_fn, 'wb+')
-			it.done = 0
-			#_dbg("\n%s%% of '%s' Done" % (' '*20, it.title))
-			while it.done<it.lenght:
-				buff = h_url.read(1024)
-				if not(buff):
-					h_url.close()
-					fd.close()
-					break
-				fd.write(buff)
-				it.done += len(buff)
-				#it.percent = it.done*100./it.lenght
-				#_dbg("\r%6.2f" % (it.percent))
-			#_dbg('\n')
+		it.downloading = True
+		fd = open(dst_fn, 'wb+')
+		it.done = 0
+		while it.done<it.lenght:
+			buff = h_url.read(1024)
+			if not(buff):
+				break
+			fd.write(buff)
+			it.done += len(buff)
+		h_url.close()
+		fd.close()
+		it.downloading = False

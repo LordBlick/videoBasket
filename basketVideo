@@ -54,33 +54,20 @@ class videoBasket:
 		gtk.main()
 		gtk.threads_leave()
 
-	uiFn = lambda mn, fileName: fileName.replace(ph.expanduser('~'), '~')
-
 	def set_drag(mn, w):
 		w.drag_dest_set(gtk.DEST_DEFAULT_MOTION|gtk.DEST_DEFAULT_HIGHLIGHT|gtk.DEST_DEFAULT_DROP,
 			lsDragAndDrop, gtk.gdk.ACTION_COPY)
 
-	def thrPrint(mn, text, tag=None):
-		ui = mn.ui
-		gtk.threads_enter()
-		try:
-			if tag:
-				_p(text, tag=tag)
-			else:
-				_p(text)
-		finally: gtk.threads_leave()
-
 	def uiInit(mn):
 		from uiVideoBasket import videoBasketUI
 		ui = mn.ui = videoBasketUI()
-		gdk = gtk.gdk
 		ui.mainWindow.connect("destroy", lambda xargs: mn.Exit())
 		mn.set_drag(ui.tvUrls)
 		mn.set_drag(ui.logView)
 		ui.tvUrls.connect("drag-motion", mn.dragMotion)
 		ui.logView.connect("drag-motion", mn.dragMotion)
 		global _p
-		_p = lambda text, tag=None: ui.logView.insert_end(hh(text), tag=tag)
+		_p = lambda text, tag=None: ui.vt.insert_ext(hh(text), tag=tag)
 		ui.logView.connect("drag_data_received", mn.dragReceived)
 		ui.tvUrls.connect("drag_data_received", mn.dragReceived)
 		ui.txtAddURL.connect("activate", mn.appAddURL)
@@ -103,8 +90,7 @@ class videoBasket:
 			mn.cfg['Main']['resolutionLimit'] = "%i" % cb.get_model()[idx][1]
 
 	def appClear(mn):
-		mn.ui.logView.clear_text()
-		mn.lastData = None
+		mn.ui.vt.clear_text()
 
 	def dragMotion(mn, widget, context, x, y, timestamp):
 		ui = mn.ui
@@ -120,6 +106,15 @@ class videoBasket:
 		#import youtube_dl
 		import thread
 		thread.start_new_thread(threadCall, ())
+
+	def thrPrint(mn, text, tag=None):
+		gtk.threads_enter()
+		try:
+			if tag:
+				_p(text, tag=tag)
+			else:
+				_p(text)
+		finally: gtk.threads_leave()
 
 	def urlDetect(mn, textIn):
 		from urllib import unquote as unqt
@@ -179,20 +174,21 @@ class videoBasket:
 		yt = mn.yt
 		unitTb = '', 'k', 'M', 'G'
 		#_pc("ping…\n")
-		if mn.lastiddle and(not(yt.iddle)):
+		if yt.downloading and(not(mn.last_downloading)):
 			#_p('\n')
 			mn.last_done = 0
-		if not(mn.lastiddle):
+		if yt.downloading or(mn.last_downloading):
 			lifetime = t_s()-yt.start_time # float()
 			done = yt.done
+			if not(yt.lenght):
+				return True
 			p_done = done*1./yt.lenght
 			percent = 100.*p_done
-			#p_todo = 1.-p_done
-			p_todo = (yt.lenght-done)*1./yt.lenght
+			p_todo = 1.-p_done
 			txtParamDL = ''
 			if p_done and(round(p_todo, 1)):
 				txtParamDL += ", ETA:%.1fs" % (lifetime*p_todo/p_done)
-			if yt.iddle:
+			if yt.downloading:
 				dps = done_per_s = float(done)/lifetime
 			else:
 				dps = done_per_s = (done-mn.last_done)
@@ -208,29 +204,20 @@ class videoBasket:
 			tbf.delete(tbf.get_iter_at_line(tbf.get_line_count()-1), tbf.get_end_iter())
 			_p("%6.2f%% of '%s' done%s" % (percent, yt.title, txtParamDL))
 			mn.last_done = done
-			if yt.iddle:
+			if not(yt.downloading):
 				_p('\n')
-		mn.lastiddle = yt.iddle
+		mn.last_downloading = yt.downloading
 		ui.buttonReload.set_sensitive(mn.cfg['Main'].has_key('lastDropedURLs'))
 		return True
-
-	def thrPrint(mn, text, tag=None):
-		ui = mn.ui
-		gtk.threads_enter()
-		try:
-			if tag:
-				_p(text, tag=tag)
-			else:
-				_p(text)
-		finally: gtk.threads_leave()
 
 	def downloadThread(mn):
 		_dbg("Thread started…\n")
 		from time import sleep
-		from os import chdir as cd, environ as env, setsid
+		from os import chdir as cd,  getcwd as pwd, environ as env, setsid
 		from psutil import Process
-		if mn.yt.iddle and(mn.lastiddle) and(mn.procTask == None or mn.procTask.poll() != None): # poll()==None means still running
+		if mn.yt.iddle and(not(mn.last_downloading)) and(mn.procTask == None or mn.procTask.poll() != None): # poll()==None means still running
 			ui = mn.ui
+			_pwd = pwd()
 			gtk.threads_enter()
 			_dbg("Thread pass#0\n")
 			try:
@@ -250,10 +237,12 @@ class videoBasket:
 					gtk.threads_leave()
 				_dbg("Thread pass#2\n")
 				if Engine=='Youtube' and(ui.checkOwnYTdl.get_active()) and(video_id):
-					while not(mn.yt.iddle and(mn.lastiddle)):
-						sleep(1)
-					mn.yt.dst_dn = mn.cfg['Main']['DestinationDirName']
-					mn.yt.go(video_id, int(resolutionLimit))
+					repeat = True
+					while repeat:
+						while mn.yt.downloading or(mn.last_downloading):
+							sleep(2)
+						mn.yt.dst_dn = mn.cfg['Main']['DestinationDirName']
+						repeat = mn.yt.go(video_id, int(resolutionLimit))
 				elif url:
 					cmd = ''
 					if resolutionLimit and(not(Engine in('Direct',))):
@@ -270,7 +259,7 @@ class videoBasket:
 								lines.pop()
 							lines = sorted([line for line in map(lambda s: s.split(None, 3), lines)
 								if mn.extractResolution(line[2])<=resolutionLimit],
-								key=lambda x: (mn.extractResolution(x[2]), -int(x[0])), reverse=True)
+								key=lambda x: (mn.extractResolution(x[2]), -(int(x[0]) if x[0].isdigit() else 40)), reverse=True)
 							_dbg("limit: %i\nlines:\n%s" % (resolutionLimit, '\n'.join([' | '.join(line) for line in lines])+'\n'))
 							cmd += "-f %s " % lines[0][0]
 							cmd += "'%s'" % url
@@ -300,7 +289,7 @@ class videoBasket:
 				finally:
 					gtk.threads_leave()
 			mn.procTask = None
-			cd(ph.dirname(ph.abspath(__file__)))
+			cd(_pwd)
 			_dbg("Thread exit.\n")
 
 	def call(mn, cmd):
@@ -322,7 +311,7 @@ class videoBasket:
 			mn.cfg['Main']['lastDropedURLs'] = url
 			lsUrls = ui.tvUrls.get_model()
 			lsUrls.append( (Engine, url, "%s: '%s'" % (Engine, url), video_id) )
-			if mn.yt.iddle and(mn.lastiddle) and(mn.procTask == None or(mn.procTask.poll()!=None)):
+			if mn.yt.iddle and(not(mn.last_downloading)) and(mn.procTask == None or(mn.procTask.poll()!=None)):
 				mn.appStartThread(mn.downloadThread)
 		else:
 			mn.cfg['Main'].remove('lastDropedURLs')
@@ -342,7 +331,6 @@ class videoBasket:
 
 	def appStart(mn):
 		ui = mn.ui
-		mn.lastData = None
 		mn.appCfgLoad()
 		global _tp
 		_tp = mn.thrPrint
@@ -373,22 +361,21 @@ class videoBasket:
 		mn.reDirectMedia = re.compile('(?P<Url>http://.*\..*/.*\.mp[1-4])', re.I | re.U)
 		mn.reResInfoHead = re.compile('format\s+code\s+extension\s+resolution\s+note', re.I | re.U)
 		from gobject import IO_IN as ioIN, IO_HUP as ioHUP, io_add_watch as addWatch,  timeout_add as addTick
-		import pty, fcntl, os
+		import pty, fcntl
+		from os import fdopen as fdo, O_NDELAY as nDly
 		mn.pty_parent_fd, mn.pty_child_fd = pty.openpty()
-		mn.fd = os.fdopen(mn.pty_parent_fd, 'r')
+		mn.fd = fdo(mn.pty_parent_fd, 'r')
 		file_flags = fcntl.fcntl(mn.fd, fcntl.F_GETFL)
-		fcntl.fcntl(mn.fd, fcntl.F_SETFL, file_flags|os.O_NDELAY)
+		fcntl.fcntl(mn.fd, fcntl.F_SETFL, file_flags|nDly)
 		mn.bufRN = ''
-		mn.dcTimePerf={}
 		mn.txtBfSchFlags = gtk.TEXT_SEARCH_TEXT_ONLY | gtk.TEXT_SEARCH_VISIBLE_ONLY
-		mn.lastiddle = True
+		mn.last_downloading = False
 		mn.tickID = addTick(1000, mn.thread1s)
-		mn.watchID = addWatch(mn.fd, ioIN, ui.vt.logWrite)
 		mn.procTask = None
-		mn.yt = YoutubeDL(logger=_tp)
+		mn.watchID = addWatch(mn.fd, ioIN, ui.vt.logWrite)
+		mn.yt = YoutubeDL(logger=_tp) #, rundir=ui.rundir
 
 	def appStop(mn):
-		fileData = mn.ui.logView.get_text()
 		mn.appCfgStore()
 		from gobject import source_remove as unWatch
 		unWatch(mn.watchID)
@@ -401,12 +388,18 @@ class videoBasket:
 
 	def appCfgLoad(mn):
 		ui = mn.ui
+		#mn.pwd = pwd()
+		#cd(ph.dirname(ph.abspath(__file__)))
+		#mn.rundir = pwd()
 		mn.cfg = clIniFile.IniSections()
-		rfn = ph.expanduser(__file__)
-		cfgBase = ph.dirname(ph.abspath(rfn))+'/'+ ph.basename(rfn)
+		_dbg("\nmn.cfg.callDir:\t%s\n\n" % mn.cfg.callDir)
+		ufn = ph.expanduser(__file__)
+		_dbg("abspath:\t%s\n" % ph.abspath(__file__))
+		_dbg("realpath (follow links):\t%s\n" % ph.realpath(__file__))
+		cfgBase = mn.cfg.callDir+'/'+ ph.basename(__file__)
+		_dbg("__file__:\n\t%s\nbasename:\n\t%s\nConfig base: '%s'\n" % (__file__, ph.basename(__file__), cfgBase))
 		mn.old_cfg_fn = cfgBase+'.conf'
 		cfg_fn = cfgBase+'.ini'
-		_pc("Config base: '%s'\n" % cfgBase)
 		if ph.isfile(cfg_fn):
 			mn.cfg.load(cfg_fn)
 			_pc("Loaded Config file: '%s'\n" % (cfg_fn))
@@ -424,8 +417,8 @@ class videoBasket:
 	def appCfgStore(mn):
 		ui = mn.ui
 		ui.storeGeometry()
-		if not(mn.cfg['Main']['FindPath']):
-			mn.cfg['Main'].remove('FindPath')
+		if not(mn.cfg['Main']['lastDropedURLs']):
+			mn.cfg['Main'].remove('lastDropedURLs')
 		if mn.lastcfg!=(mn.cfg['Main'], mn.cfg['UI']):
 			mn.cfg.section_place('Main', 0)
 			mn.cfg.store()

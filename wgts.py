@@ -67,6 +67,16 @@ class MvWg:
 	def move(it, x, y):
 		it.hFixed.move(it, x, y)
 
+	size = lambda it, w, h: it.set_size_request(w, h)
+
+class Image(gtk.Image, MvWg):
+	def __init__(it, hFixed, posX, posY, pix=None):
+		it.hFixed = hFixed
+		super(it.__class__, it).__init__() # gtk.Label
+		if isinstance(pix, gtk.gdk.Pixbuf):
+			it.set_from_pixbuf(pix)
+		hFixed.put(it, posX, posY)
+
 class Label(gtk.Label, MvWg):
 	def __init__(it, txtLabel, hFixed, posX, posY, width, height=None, fontDesc=None, xalign=None, selectable=False):
 		it.hFixed = hFixed
@@ -78,12 +88,12 @@ class Label(gtk.Label, MvWg):
 			it.set_alignment(xalign, yalign)
 		if type(selectable)==bool:
 			it.set_selectable(selectable)
+			it.set_can_focus(False)
 		it.show()
 		if not height:
 			height=Height
 		it.set_size_request(width, height)
-		if hFixed:
-			hFixed.put(it, posX, posY)
+		hFixed.put(it, posX, posY)
 
 class Butt(gtk.Button, MvWg):
 	"""If stockID is set, txtLabel set as True means full stock button,
@@ -179,33 +189,25 @@ class Entry(gtk.Entry, MvWg):
 		it.set_size_request(width, height)
 		hFixed.put(it, posX, posY)
 
-class TextView(gtk.TextView):
-	def __init__(it, hFixed, posX, posY, width, height, bWrap=False, bEditable=True, tabSpace=2, fontDesc=None):
-		super(it.__class__, it).__init__()
-		it.hFixed = hFixed
-		it.autoscroll = True
-		it.changed = False
-		it.set_property("editable", bEditable)
-		if fontDesc:
-			it.modify_font(fontDesc)
-			it.setTabSpace(tabSpace, fontDesc=fontDesc)
-		if bWrap:
-			it.set_wrap_mode(gtk.WRAP_WORD)
-		scrollViewTxt = gtk.ScrolledWindow()
-		vadj = scrollViewTxt.get_vadjustment()
-		vadj.connect('changed', it.reScrollV, scrollViewTxt)
-		scrollViewTxt.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-		scrollViewTxt.add(it)
-		scrollViewTxt.set_size_request(width, height)
-		hFixed.put(scrollViewTxt, posX, posY)
+class MvScrolled:
+	"This is abctract class !"
+	def reScrollV(it, adjV, scrollV):
+		'Scroll to the bottom of the TextView when the adjustment changes.'
+		if it.autoscroll:
+			adjV.set_value(adjV.upper - adjV.page_size)
+			scrollV.set_vadjustment(adjV)
+		return
 
-	def set_text(it, txt):
-		it.get_buffer().set_text(txt)
-		it.changed = True
+	def setup_scroll(it, x, y, w, h):
+		scrollViewport = gtk.ScrolledWindow()
+		vadj = scrollViewport.get_vadjustment()
+		vadj.connect('changed', it.reScrollV, scrollViewport)
+		scrollViewport.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+		scrollViewport.add(it)
+		scrollViewport.set_size_request(w, h)
+		it.hFixed.put(scrollViewport, x, y)
 
-	clear_text = lambda it: it.set_text('')
-
-	def set_size_request(it, x, y):
+	def size(it, x, y):
 		try:
 			parent = it.get_parent()
 			bPass = True
@@ -227,6 +229,33 @@ class TextView(gtk.TextView):
 		else:
 			it.hFixed.move(it, x, y)
 
+class TreeView(gtk.TreeView, MvScrolled):
+	def __init__(it, model, hFixed, posX=0, posY=0, width=0, height=0):
+		super(it.__class__, it).__init__(model)
+		it.hFixed = hFixed
+		it.autoscroll = True
+		it.setup_scroll(posX, posY, width, height)
+
+class TextView(gtk.TextView, MvScrolled):
+	def __init__(it, hFixed, posX=0, posY=0, width=0, height=0, bWrap=False, bEditable=True, tabSpace=2, fontDesc=None):
+		super(it.__class__, it).__init__()
+		it.hFixed = hFixed
+		it.autoscroll = True
+		it.changed = False
+		it.set_property("editable", bEditable)
+		if fontDesc:
+			it.modify_font(fontDesc)
+			it.setTabSpace(tabSpace, fontDesc=fontDesc)
+		if bWrap:
+			it.set_wrap_mode(gtk.WRAP_WORD)
+		it.setup_scroll(posX, posY, width, height)
+
+	def set_text(it, txt):
+		it.get_buffer().set_text(txt)
+		it.changed = True
+
+	clear_text = lambda it: it.set_text('')
+
 	def get_text(it):
 		tBuff = it.get_buffer()
 		return tBuff.get_text(tBuff.get_start_iter(), tBuff.get_end_iter())
@@ -241,13 +270,6 @@ class TextView(gtk.TextView):
 			buff.insert(end, text)
 		del(end)
 		it.changed = True
-
-	def reScrollV(it, adjV, scrollV):
-		'Scroll to the bottom of the TextView when the adjustment changes.'
-		if it.autoscroll:
-			adjV.set_value(adjV.upper - adjV.page_size)
-			scrollV.set_vadjustment(adjV)
-		return
 
 	def setTabSpace(it, spaces, fontDesc=None):
 		pangoTabSpc = getTxtPixelWidth(it, ' '*spaces, fontDesc)

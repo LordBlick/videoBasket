@@ -45,8 +45,8 @@ class videoBasketUI:
 			gtk.main()
 
 	def uiInit(ui):
-		from os import chdir as cd, path as ph
-		cd(ph.dirname(ph.abspath(__file__)))
+		from os import path as ph
+		runpath = ph.dirname(ph.realpath(__file__))
 		if __name__ == "__main__":
 			ui.cfg = {}
 		wg.Height = 25
@@ -59,12 +59,12 @@ class videoBasketUI:
 		ui.mainWindow.set_border_width(5)
 		accGroup = gtk.AccelGroup()
 		ui.mainWindow.add_accel_group(accGroup)
-		ui.mainFrame = gtk.Fixed()
+		mfm = ui.mainFrame = gtk.Fixed()
 
 		#List of Config Memory (Fuses, Lock) Name|ValueHex|TooltipValueBin
 		from gobject import TYPE_STRING as goStr, TYPE_INT as goInt
 		lsUrls = gtk.ListStore(goStr, goStr, goStr, goStr)
-		ui.tvUrls = gtk.TreeView(lsUrls)
+		ui.tvUrls = wg.TreeView(lsUrls, mfm)
 		#tvUrlsSelection = ui.tvUrls.get_selection()
 		#tvUrlsSelection.set_mode(gtk.SELECTION_SINGLE)
 		#Column #1 - Engine
@@ -78,34 +78,32 @@ class videoBasketUI:
 		ui.tvUrls.append_column(tvcUrl)
 		ui.tvUrls.set_tooltip_column(2, )
 		ui.tvUrls.modify_base(gtk.STATE_NORMAL, gtk.gdk.Color('#131'))
-		wg.putScroll(ui.mainFrame, ui.tvUrls, 0, 0, 0, 0)
 
-		ui.logView = wg.TextView(ui.mainFrame, 0, 0, 0, 0,
-			bEditable=False, tabSpace=4, fontDesc = ui.fontFixedDesc)
+		ui.logView = wg.TextView(mfm, bEditable=False, tabSpace=4, fontDesc = ui.fontFixedDesc)
 
-		ui.txtAddURL = wg.Entry(ui.mainFrame, 0,  0, 0, clearIco=True)
-		ui.buttonAddURL = wg.Butt("Add URL", ui.mainFrame, 0,  0, 50)
+		ui.txtAddURL = wg.Entry(mfm, 0,  0, 0, clearIco=True)
+		ui.buttonAddURL = wg.Butt("Add URL", mfm, 0,  0, 50)
 
-		ui.checkOwnYTdl = wg.Check("Internal YT downloader", ui.mainFrame, 0,  0, 130)
-		ui.labelLimit = wg.Label("Resolution limit:", ui.mainFrame, 0,  0, 80)
+		ui.checkOwnYTdl = wg.Check("Internal YT downloader", mfm, 0,  0, 130)
+		ui.labelLimit = wg.Label("Resolution limit:", mfm, 0,  0, 80)
 		ui.lsLimit = gtk.ListStore(goStr, goInt)
-		ui.cbLimit = wg.ComboBox(ui.lsLimit, ui.mainFrame, 0, 0, 70)
+		ui.cbLimit = wg.ComboBox(ui.lsLimit, mfm, 0, 0, 70)
 
-		ui.logoBigPixbuf = gtk.gdk.pixbuf_new_from_file("pic/video.svg")
+		ui.logoBigPixbuf = gtk.gdk.pixbuf_new_from_file(runpath+"/pic/video.svg")
 		gtk.window_set_default_icon_list(ui.logoBigPixbuf, )
 		ui.imageLogo = gtk.Image()
 		ui.imageLogo.set_from_pixbuf(ui.logoBigPixbuf)
-		ui.mainFrame.put(ui.imageLogo, 0, 0)
+		mfm.put(ui.imageLogo, 0, 0)
 
-		ui.buttonReload = wg.Butt(None, ui.mainFrame, 0, 0, 30, stockID=gtk.STOCK_REFRESH) #"Read File..."
+		ui.buttonReload = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_REFRESH) #"Read File..."
 
-		ui.buttonClear = wg.Butt("Clear", ui.mainFrame, 0,  0, 50)
+		ui.buttonClear = wg.Butt("Clear", mfm, 0,  0, 50)
 
-		ui.buttonExit = wg.Butt("Exit (Ctrl+Q)", ui.mainFrame, 0, 0, 80)
+		ui.buttonExit = wg.Butt("Exit (Ctrl+Q)", mfm, 0, 0, 80)
 		ui.buttonExit.add_accelerator("clicked", accGroup, ord('Q'),
 			gtk.gdk.CONTROL_MASK, gtk.ACCEL_VISIBLE)
 
-		ui.mainWindow.add(ui.mainFrame)
+		ui.mainWindow.add(mfm)
 		ui.mainWindow.show_all()
 		ui.mainWindow.set_keep_above(True)
 		ui.lastWinSize = None
@@ -122,11 +120,11 @@ class videoBasketUI:
 			h1 = y/2+50
 			h2 = y/2-60
 			ya = h1+5
-			ui.tvUrls.get_parent().set_size_request(w-10, h1)
+			ui.tvUrls.size(w-10, h1)
 			ui.logView.move(0, ya)
-			ui.logView.set_size_request(w-10, h2)
+			ui.logView.size(w-10, h2)
 			ui.txtAddURL.move(0, y)
-			ui.txtAddURL.set_size_request(w-65, H)
+			ui.txtAddURL.size(w-65, H)
 			ui.buttonAddURL.move(w-60, y)
 			y += 30
 			ui.checkOwnYTdl.move(0, y)
