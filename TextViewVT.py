@@ -223,6 +223,8 @@ class VTtext:
 		}
 
 	def __init__(it, textView):
+		if not(isinstance(textView, gtk.TextView)):
+			raise TypeError("Class %s initial argument must be gtk.TextView instance used to write console output" % it.__class__.__name__)
 		textView.set_overwrite(True)
 		it.chPtr = 0
 		it.busy = False
@@ -230,7 +232,7 @@ class VTtext:
 		tbf = it.txtBuff = textView.get_buffer()
 		it.logBufTags = TextBufferTags(tbf)
 		it.buffConCode = ''
-		it.txtBfSchFlags = gtk.TEXT_SEARCH_TEXT_ONLY | gtk.TEXT_SEARCH_VISIBLE_ONLY
+		it.proc = None
 
 	def _m(it, bfi, p1, p2):
 		if p1 is None and(p2 is None):
@@ -511,3 +513,25 @@ class VTtext:
 		from gobject import source_remove as unWatch
 		unWatch(it.watchID)
 		it.fd.close()
+
+	def runInVT(it, cmd):
+		from subprocess import Popen as ppn
+		from time import sleep as slp
+		from shlex import split as shs
+		from os import setsid
+		# drop run if busy by previous task
+		if type(it.proc) is ppn and(it.proc.poll()== None):
+			return
+		it.proc = ppn(shs(cmd),
+			stdin=PIPE,
+			stdout=it.ui.vt.pty_child_fd,
+			stderr=STDOUT, preexec_fn=setsid)
+		it.proc.children = None
+		try:
+			p = Process(it.proc.pid)
+			it.proc.children = p.get_children(recursive=True)
+		except:
+			pass
+		while it.proc.poll()==None: # poll()==None means still running
+			slp(.5)
+		it.proc = None
