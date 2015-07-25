@@ -360,7 +360,7 @@ class VTtext:
 		else:
 			tbf.insert(bfi, txt)
 
-	def insertCtrl(it, bfi, txt):
+	def asciiCtrlHandle(it, bfi, txt):
 		if not(txt):
 			return
 		tbf = it.txtBuff
@@ -372,7 +372,7 @@ class VTtext:
 		if dbg:
 			max_loop = 1000
 		loop = 0
-		_dbn("insertCtrl[%i]:\n\t%s\n" % (len(txt),repr(txt)))
+		_dbn("asciiCtrlHandle[%i]:\n\t%s\n" % (len(txt),repr(txt)))
 		while txt:
 			if dbg and(loop>=max_loop):
 				_dbg("Overlooped Inserts, unprocessed text:\n\t%s\n" % repr(txt))
@@ -437,7 +437,7 @@ class VTtext:
 		it.logBufTags.all_reset()
 		if tag:
 			lsTags.append(tag)
-		it.insertCtrl(bfi, txt)
+		it.asciiCtrlHandle(bfi, txt)
 		it.logBufTags.all_reset()
 		lsTags.extend(saveTags)
 		'''
@@ -457,7 +457,7 @@ class VTtext:
 			findEsc = newTxt.find('\x1B')
 			if findEsc>-1:
 				if findEsc>0:
-					it.insertCtrl(bfi, newTxt[:findEsc])
+					it.asciiCtrlHandle(bfi, newTxt[:findEsc])
 				mTermCtrl = reTermCtrl.search(newTxt)
 				if mTermCtrl:
 					ctrlB, ctrlE = mTermCtrl.span()
@@ -483,19 +483,19 @@ class VTtext:
 					newTxt = ''
 				continue
 			else:
-				it.insertCtrl(bfi, newTxt)
+				it.asciiCtrlHandle(bfi, newTxt)
 				newTxt = ''
 		it.chPtr = bfi.get_offset()
 		#_dbg("Insert: %s\n" % str(bfi.get_offset()))
 		it.busy = False
 
-	def logWrite(it, fd, condition):
+	def ptyReceiver(it, fd, condition):
 		it.escHandle(fd.read())
 		return True
 
 	def ptyConnect(it, watchcall=None):
 		if watchcall is None:
-			watchcall = it.logWrite
+			watchcall = it.ptyReceiver
 		from gobject import IO_IN as ioIN, IO_HUP as ioHUP, io_add_watch as addWatch
 		import pty, fcntl
 		from os import ttyname, fdopen as fdo, O_NDELAY as nDly
