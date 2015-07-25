@@ -33,6 +33,7 @@ def _err(_str):
 	sto.write(str(_str))
 def _dbg(_str):
 	if dbg: sto.write(str(_str))
+_dbn = lambda _str: None
 
 import gtk, pango
 from gtk.gdk import Color
@@ -167,12 +168,12 @@ class VTtext:
 		#'G': 'cursor_x', # Cursor Horizontal Absolute
 		#'H': 'cursor_yx', # Cursor Position
 		#'J': 'clear_screen', # 
-		#'K': 'clear_line', # 
+		'K': 'clear_line', # 
 		#'S': 'scroll_up', # 
 		#'T': 'scroll_down', # 
 		#'f': 'cursor_yx', # Horizontal and Vertical Position
 		'm': '_m', # Select Graphic Rendition
-		#'n': 'report_pos', # must be 6n reply to stdin of app by ESC[x;yR
+		#'n': 'report_pos', # must be in reply to stdin of app by ESC[x;yR
 		#'s': 'store_pos', # 
 		#'u': 'load_pos', # 
 		}
@@ -256,37 +257,34 @@ class VTtext:
 
 	def cursor(it, bfi, p1, p2, code):
 		tbf = it.txtBuff
-		if p1 is None and(p2 is None):
+		args = tuple(arg for arg in (p1, p2) if type(arg) is int)
+		if not(args):
 			count = 1
 			_dt = 'default'
-		elif type(p1) is int and(type(p2) is int):
-			_dbg("Overcounted args to Move Cursor %s: %s;%s\n" % (code.capitalize(), str(p1), str(p2)))
-			return False
-		elif type(p1) is int and(p2 is None):
+		elif len(args)==1:
 			count = p1
 			_dt = "%i" % p1
 		else:
-			_dbg("Strange args to Move Cursor %s: %s;%s\n" % (code.capitalize(), str(p1), str(p2)))
+			_dbg("Strange args to Move Cursor %s: %i;%i\n" % (code.capitalize(), p1, strp2))
 			return False
 		ds = {'up': '↑', 'down': '↓', 'forward': '→', 'back': '←'}[code]
 		_dbg("Handle %sx%s\n" % (ds, _dt))
 		dbgReportIterPos(tbf, bfi)
 		x = bfi.get_line_offset()
 		y =  bfi.get_line()
+		w = bfi.get_chars_in_line()
 		h = tbf.get_line_count()-1
 		if code=='up':
 			bfi.backward_lines(count)
 		elif code=='down':
 			bfi.forward_lines(count)
 		elif code=='forward':
-			w = bfi.get_chars_in_line()
 			forward = min(w-x, count)
 			if forward:
 				bfi.forward_chars(forward)
 			if w-x<count:
 				tbf.insert(bfi, ' '*(count+x-w))
 		elif code=='back':
-			w = bfi.get_chars_in_line()
 			backward = min(x, count)
 			if backward:
 				bfi.backward_chars(backward)
@@ -307,28 +305,53 @@ class VTtext:
 	cursor_forward = lambda it, bfi, p1, p2: it.cursor(bfi, p1, p2, 'forward')
 	cursor_back = lambda it, bfi, p1, p2: it.cursor(bfi, p1, p2, 'back')
 
-	def busy_drop_click(it,  window, event):
-		return it.busy
+	def clear_line(it, bfi, *args_in):
+		args = tuple(arg for arg in args_in if type(arg) is int)
+		if not(args):
+			code = 0
+			_dt = 'default'
+		elif len(args)==1 and(args[0] in range(0, 3)):
+			code = args[0]
+			_dt = "%i" % p1
+		else:
+			_dbg("Strange args to Clear Line: %s\n" % str(args_in))
+			return False
+		tbf = it.txtBuff
+		y, h =  bfi.get_line(), tbf.get_line_count()-1
+		x, w = bfi.get_line_offset(), bfi.get_chars_in_line()-int(y<h)
+		cfi = bfi.copy()
+		fwd = w-x
+		if code in(0, 2) and fwd:
+			cfi.forward_chars(w-x)
+		if code in(1, 2) and (x):
+			bfi.backward_chars(x)
+		_dc = ord(cfi.get_char())
+		_dbg("Clearing %s[%i/%i]:by %s code\n\tin pos:%i/%i\n" % (
+			('line to the end', 'line from the beginning', 'the whole line')[code],
+			y, h, _dt , x, w))
+		tbf.delete(bfi, cfi)
+		if code==1 and (x): # 
+			tbf.insert(bfi, ' '*x)
 
 	def clear_text(it):
 		it.logView.clear_text()
 		it.chPtr = 0
 
-	def insert_b(it, bfi, txt):
+	def insert_p(it, bfi, txt):
 		if not(txt):
 			return
 		tbf = it.txtBuff
-		x, w = bfi.get_line_offset(), bfi.get_chars_in_line()
-		h = tbf.get_line_count()-1
-		y =  bfi.get_line()
+		y, h =  bfi.get_line(), tbf.get_line_count()-1
+		x, w = bfi.get_line_offset(), bfi.get_chars_in_line()-int(y<h)
 		ln = len(txt)
 		cfi = bfi.copy()
 		if w-x and (ln):
-			forward = min(ln, w-x-int(y<h)) #-1
+			forward = min(ln, w-x) #-1
 			cfi.forward_chars(forward)
-			_dbg("insert_b::N forward:%i,len(txt):%i,→:%i/%i\n" % (forward, ln, x, w))
+			_dbg("insert_p::N forward:%i,len(txt):%i,→:%i/%i\n" % (forward, ln, x, w))
 			_dt = tbf.get_slice(bfi, cfi).decode('utf-8')
 			_dc = cfi.get_char()
+			#if ord(_dc):
 			_dbg("Deleting[%i]:@%s\n\t%s\n" % (len(_dt), repr(_dc), repr(_dt)))
 			tbf.delete(bfi, cfi)
 		ltg = it.logBufTags
@@ -337,7 +360,7 @@ class VTtext:
 		else:
 			tbf.insert(bfi, txt)
 
-	def insertRN(it, bfi, txt):
+	def insertCtrl(it, bfi, txt):
 		if not(txt):
 			return
 		tbf = it.txtBuff
@@ -348,59 +371,80 @@ class VTtext:
 			return
 		if dbg:
 			max_loop = 1000
-			loop = 0
+		loop = 0
+		_dbn("insertCtrl[%i]:\n\t%s\n" % (len(txt),repr(txt)))
 		while txt:
 			if dbg and(loop>=max_loop):
 				_dbg("Overlooped Inserts, unprocessed text:\n\t%s\n" % repr(txt))
 				break
-			findR = txt.find('\r')
-			findN = txt.find('\n')
 			# Which code ist first?
-			if findR>-1 and(findN>-1) and(findR<findN) or(findR>-1 and(findN<0)):
-				txt_o = txt[:findR]
-				txt = txt[findR+1:]
+			finds = tuple(txt.find(s) for s in '\b \r \n'.split(' ') if s in txt) # \x08
+			if finds:
+				findPos = min(finds)
+				code = txt[findPos]
+				txt_o = txt[:findPos]
 				if txt_o:
-					it.insert_b(bfi, txt_o)
-					_dbg("Insert_R[%i]:\n\t%s\n" % (len(txt_o), repr(txt_o)))
-				x = bfi.get_line_offset()
-				_dbg("Backward_R: %i\n" % (x))
-				if x:
-					result = bfi.backward_chars(x)
-			elif findR>-1 and(findN>-1) and(findN<findR) or(findN>-1 and(findR<0)):
-				txt_o = txt[:findN]
-				if txt_o:
-					_dbg("Insert_N[%i]:\n\t%s\n" % (len(txt_o), repr(txt_o)))
-					it.insert_b(bfi, txt_o)
-				txt = txt[findN+1:]
-				y =  bfi.get_line()
-				h = tbf.get_line_count()-1
-				bfi.forward_line()
-				_dbg("N forward, ↓:%i/%i\n" % (y, h))
-				if y>=h:
-					tbf.insert(bfi, '\n')
-					_dbg(":N add new line …\n")
+					it.insert_p(bfi, txt_o)
+				txt = txt[findPos+1:]
+				_dbn("\x1b[32;1m%i\x1b[m:Leaving txt[%i]:\n\t%s\n" % (loop, len(txt), repr(txt)))
+				if code=='\b':
+					n = 1
+					while txt and(txt[0]=='\b'):
+						txt = txt[1:]
+						n += 1
+					x = bfi.get_line_offset()
+					bspc = min(x,n)
+					if bspc:
+						bfi.backward_chars(bspc)
+					_dbg("\x1b[32;1m%i\x1b[m:Backspace_B[%i/%i]\n" % (loop, bspc, n))
+				elif code=='\r':
+					if txt_o:
+						_dbg("\x1b[32;1m%i\x1b[m:Insert_R[%i]:\n\t%s\n" % (loop, len(txt_o), repr(txt_o)))
+					x = bfi.get_line_offset()
+					if x:
+						_dbg("\x1b[32;1m%i\x1b[m:Backward_R: %i\n" % (loop, x))
+						result = bfi.backward_chars(x)
+				elif code=='\n':
+					if txt_o:
+						_dbg("\x1b[32;1m%i\x1b[m:Insert_N[%i]:\n\t%s\n" % (loop, len(txt_o), repr(txt_o)))
+					y =  bfi.get_line()
+					h = tbf.get_line_count()-1
+					bfi.forward_line()
+					_dbn("\x1b[32;1m%i\x1b[m:N forward, ↓:%i/%i\n" % (loop, y, h))
+					if y>=h:
+						tbf.insert(bfi, '\n')
+						_dbg("\x1b[32;1m%i\x1b[m:N add new line …\n"% loop)
+				else:
+					_err("\x1b[32;1m%i\x1b[m:Very strange, That code shuld be omitted:\n\t%s…\n" % (loop, repr(code)))
 			else:
-				_dbg("Insert_O[%i]:\n\t%s\n" % (len(txt), repr(txt)))
-				it.insert_b(bfi, txt)
+				_dbg("\x1b[32;1m%i\x1b[m:Insert_O[%i]:\n\t%s\n" % (loop, len(txt), repr(txt)))
+				it.insert_p(bfi, txt)
 				txt = u''
+			_dbg("\x1b[32;1m%i\x1b[m:Left txt[%i]:\n\t%s\n" % (loop, len(txt),repr(txt)))
 			if dbg:
 				loop += 1
 
 	def insert_ext(it, txt, tag=None):
-		lsTags = it.logBufTags.lsTags
+		tbf = it.txtBuff
 		bfi = it.txtBuff.get_iter_at_offset(it.chPtr)
+		if tag:
+			tbf.insert_with_tags(bfi, txt, tag)
+		else:
+			tbf.insert(bfi, txt)
+		'''
+		lsTags = it.logBufTags.lsTags
 		saveTags = list(lsTags)
 		it.logBufTags.all_reset()
 		if tag:
 			lsTags.append(tag)
-		it.insertRN(bfi, txt)
+		it.insertCtrl(bfi, txt)
 		it.logBufTags.all_reset()
 		lsTags.extend(saveTags)
+		'''
 		it.chPtr = bfi.get_offset()
 
-	def logWrite(it, fd, condition):
+	def escHandle(it, newTxt):
 		txtWgt = it.logView
-		newTxt = fd.read()
 		it.busy = True
 		#_dbg("Raw read:\n'%s'\n" % newTxt)
 		_dbg("Raw read repr():\n%s\n" % repr(newTxt))
@@ -413,7 +457,7 @@ class VTtext:
 			findEsc = newTxt.find('\x1B')
 			if findEsc>-1:
 				if findEsc>0:
-					it.insertRN(bfi, newTxt[:findEsc])
+					it.insertCtrl(bfi, newTxt[:findEsc])
 				mTermCtrl = reTermCtrl.search(newTxt)
 				if mTermCtrl:
 					ctrlB, ctrlE = mTermCtrl.span()
@@ -439,9 +483,31 @@ class VTtext:
 					newTxt = ''
 				continue
 			else:
-				it.insertRN(bfi, newTxt)
+				it.insertCtrl(bfi, newTxt)
 				newTxt = ''
 		it.chPtr = bfi.get_offset()
 		#_dbg("Insert: %s\n" % str(bfi.get_offset()))
 		it.busy = False
+
+	def logWrite(it, fd, condition):
+		it.escHandle(fd.read())
 		return True
+
+	def ptyConnect(it, watchcall=None):
+		if watchcall is None:
+			watchcall = it.logWrite
+		from gobject import IO_IN as ioIN, IO_HUP as ioHUP, io_add_watch as addWatch
+		import pty, fcntl
+		from os import ttyname, fdopen as fdo, O_NDELAY as nDly
+		it.pty_parent_fd, it.pty_child_fd = pty.openpty()
+		_dbg("parent pty: %s\n" % ttyname(it.pty_parent_fd))
+		_dbg("child pty: %s\n" % ttyname(it.pty_child_fd))
+		it.fd = fdo(it.pty_parent_fd, 'r')
+		file_flags = fcntl.fcntl(it.fd, fcntl.F_GETFL)
+		fcntl.fcntl(it.fd, fcntl.F_SETFL, file_flags|nDly)
+		it.watchID = addWatch(it.fd, ioIN, watchcall)
+
+	def ptyDisconnect(it):
+		from gobject import source_remove as unWatch
+		unWatch(it.watchID)
+		it.fd.close()
