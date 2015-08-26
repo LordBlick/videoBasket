@@ -35,63 +35,40 @@ def _dbg(_str):
 	if dbg: sto.write(str(_str))
 _dbn = lambda _str: None
 
+import re
+#rexRGB = re.compile('#[\dA-F]{
+
+from time import sleep as slp
 import gtk, pango
-from gtk.gdk import Color
+from gtk.gdk import color_parse as _cp
 class TextBufferTags:
-	def __init__(it, txtViewBuff):
+	def __init__(it, tbf): # tbf - instance of gtk.TextBuffer
 		it.lsTags = []
-		for tag_arg in (
-			('bold', 'bld', pango.WEIGHT_BOLD),
-			('italic', 'stl', pango.STYLE_ITALIC),
-			('underline', 'unl', pango.UNDERLINE_SINGLE),
-			('fg_black', 'fg', 'black'),
-			('fg_dk_grey','fg_gdk',  Color('#444')),
-			('fg_red', 'fg', 'red'),
-			('fg_pink', 'fg', 'pink'),
-			('fg_green', 'fg', 'green'),
-			('fg_lt_green', 'fg_gdk',  Color('#8F8')),
-			('fg_yellow', 'fg', 'yellow'),
-			('fg_lt_yellow', 'fg_gdk',  Color('#FF8')),
-			('fg_blue', 'fg', 'blue'),
-			('fg_lt_blue', 'fg_gdk',  Color('#88F')),
-			('fg_magenta', 'fg_gdk',  Color('#F0F')),
-			('fg_lt_magenta', 'fg_gdk',  Color('#F8F')),
-			('fg_cyan', 'fg', 'cyan'),
-			('fg_lt_cyan', 'fg_gdk',  Color('#8FF')),
-			('fg_white', 'fg', 'white'),
-			('fg_grey', 'fg', 'grey'),
-			('bg_black', 'bk', 'black'),
-			('bg_dk_grey','bk_gtk',  Color('#444')),
-			('bg_red', 'bk', 'red'),
-			('bg_pink', 'bk', 'pink'),
-			('bg_green', 'bk', 'green'),
-			('bg_lt_green', 'bk_gtk',  Color('#8F8')),
-			('bg_yellow', 'bk', 'yellow'),
-			('bg_lt_yellow', 'bk_gtk',  Color('#FF8')),
-			('bg_blue', 'bk', 'blue'),
-			('bg_lt_blue', 'bk_gtk',  Color('#88F')),
-			('bg_magenta', 'bk_gtk',  Color('#F0F')),
-			('bg_lt_magenta', 'bk_gtk',  Color('#F8F')),
-			('bg_cyan', 'bk', 'cyan'),
-			('bg_lt_cyan', 'bk_gtk',  Color('#8FF')),
-			('bg_white', 'bk', 'white'),
-			('bg_grey', 'bk', 'grey'),
+		it.bold = tbf.create_tag('bold', weight = pango.WEIGHT_BOLD)
+		it.italic = tbf.create_tag('italic', style = pango.STYLE_ITALIC)
+		it.underline = tbf.create_tag('underline', underline = pango.UNDERLINE_SINGLE)
+		for name, color in (
+			('black', 'black'),
+			('dk_grey', '#444'),
+			('red', 'red'),
+			('pink', 'pink'),
+			('green', 'green'),
+			('lt_green', '#5F5'),
+			('yellow', '#AA0'),
+			('lt_yellow', '#FF5'),
+			('blue', 'blue'),
+			('lt_blue', '#55F'),
+			('magenta', '#A0A'),
+			('lt_magenta', '#F0F'),
+			('cyan', 'cyan'),
+			('lt_cyan', '#AFF'),
+			('white', 'white'),
+			('grey', 'grey'),
 			):
-			name, case, _attr = tag_arg
-			if case=='bk':
-				setattr(it, name, txtViewBuff.create_tag(name, background = _attr))
-			elif case=='bk_gtk':
-				setattr(it, name, txtViewBuff.create_tag(name, background_gdk = _attr))
-			elif case=='fg':
-				setattr(it, name, txtViewBuff.create_tag(name, foreground = _attr))
-			elif case=='fg_gdk':
-				setattr(it, name, txtViewBuff.create_tag(name, foreground_gdk = _attr))
-			elif case=='bld':
-				setattr(it, name, txtViewBuff.create_tag(name, weight = _attr))
-			elif case=='unl':
-				setattr(it, name, txtViewBuff.create_tag(name, underline = _attr))
-			elif case=='stl':
-				setattr(it, name, txtViewBuff.create_tag(name, style = _attr))
+			setattr(it, 'fg_'+name, tbf.create_tag('fg_'+name, foreground_gdk=_cp(color)))
+			setattr(it, 'bg_'+name, tbf.create_tag('bg_'+name, background_gdk=_cp(color)))
+		_dbg("yellow:%s\n" % str(it.bg_yellow.get_property('background-gdk')))
+		_dbg("lt_yellow:%s\n" % str(it.bg_lt_yellow.get_property('background-gdk')))
 
 	def all_reset(it):
 		while len(it.lsTags):
@@ -119,16 +96,28 @@ class TextBufferTags:
 	bg_reset = lambda it: it.cm_reset('bg_')
 
 	def get(it, tag_name):
-		if tag_name and(hasattr(it, tag_name)):
-			it_attr =  getattr(it, tag_name)
-			if callable(it_attr):
-				it_attr()
-				return True
-			elif isinstance(it_attr, gtk.TextTag):
-				it.cm_reset(tag_name[:3])
-				it.lsTags.append(it_attr)
-				return True
-		return None
+		if not(tag_name):
+			return False
+		if not(hasattr(it, tag_name)) and(tag_name[:4] in('fg__', 'bg__')):
+			try:
+				color = _cp('#'+tag_name[3:])
+			except ValueError:
+				return False
+			if tag_name[:2]=='fg':
+				setattr(it, tag_name, tbf.create_tag(tag_name, foreground_gdk=color))
+			elif tag_name[:2]=='bg':
+				setattr(it, tag_name, tbf.create_tag(tag_name, background_gdk=color))
+		if not(hasattr(it, tag_name)):
+			return False
+		it_attr =  getattr(it, tag_name)
+		if callable(it_attr):
+			it_attr()
+			return True
+		elif isinstance(it_attr, gtk.TextTag):
+			it.cm_reset(tag_name[:3])
+			it.lsTags.append(it_attr)
+			return True
+		return False
 
 """
 cursor controls
@@ -144,9 +133,7 @@ erase functions
 ESC[2J	clear screen and home cursor
 ESC[K	clear to end of line
 """
-
-import re
-rTxt = '(?P<TermCtrl>(\x1B|(\^\[))(\[|\()(?P<p1>\d*);?(?P<p2>\d*)(?P<Code>[A-HJKSTfhilmnsu]){1})'
+rTxt = '(?P<TermCtrl>(\x1B|(\^\[))(\[|\()(?P<Params>[;\d]*)(?P<Code>[A-HJKSTfhilmnsu]){1})'
 reTermCtrl = re.compile(rTxt, re.X | re.U)
 
 
@@ -154,6 +141,42 @@ def dbgReportIterPos(tbf, bfi):
 	p, a = bfi.get_offset(), tbf.get_char_count()
 	x, y, w, h = bfi.get_line_offset(), bfi.get_line(), bfi.get_chars_in_line(), tbf.get_line_count()-1
 	_dbg("p:%i/%i,↓:%i/%i,→:%i/%i\n" % (p, a, y, h, x, w))
+
+# Default color levels for the color cube - author https://gist.github.com/TerrorBite/
+# from calc256.py: https://gist.github.com/TerrorBite/e738e25881d4aecf9043
+cubelevels = [0x00, 0x5F, 0x87, 0xAF, 0xD7, 0xFF]
+# Generate a list of midpoints of the above list
+snaps = ((x+y)/2 for x, y in zip(cubelevels, [0]+cubelevels)[1:])
+_err("###\nSnaps:%s\n###\n" % str(tuple(snaps)))
+
+def rgb2short(r, g, b):
+	'''Converts RGB values to the nearest equivalent xterm-256 color.
+	'''
+	# Using list of snap points, convert RGB value to cube indexes
+	r, g, b = map(lambda x: len(tuple(s for s in snaps if s<x)), (r, g, b))
+	# Simple colorcube transform
+	return r*36 + g*6 + b + 16
+
+def base6(number):
+	d, m = divmod(number, 6)
+	m_base = ''.join(map(lambda i: str(i), range(6)))[m]
+	if d > 0:
+		return base6(d)+m_base
+	return m_base
+
+def code2rgb(code):
+	if code==7:
+		r, g, b = (0x5F,)*3
+	elif code==8:
+		r, g, b = (0xB0,)*3
+	elif code<16:
+		r, g, b, l = reversed(map(lambda s: int(s), '{:04b}'.format(code)))
+		r, g, b = map(lambda c: (l+1)*c*0x7F+l, (r, g, b))
+	elif 232>code>15: # a
+		r, g, b = map(lambda s: int(s), base6(code-16))
+	elif 255>code>231: # end greyscale
+		r, g, b = (((code-231)*256/24)+8,)*3
+	
 
 class VTtext:
 	#Es = '\x1B'
@@ -182,9 +205,6 @@ class VTtext:
 		#5: 'blink on',
 		#7: 'reverse video on',
 		#8: 'nondisplayed (invisible)',
-		(39, 49): 'fg_bg_reset', # Default text color (foreground); Default background color
-		39: 'fg_reset', # Default text color (foreground)
-		49: 'bg_reset', # Default background color
 		1: 'bold',
 		3: 'italic',
 		4: 'underline',
@@ -204,6 +224,8 @@ class VTtext:
 		(36, 1): 'fg_lt_cyan',
 		37: 'fg_white',
 		(37, 1): 'fg_grey',
+		#(38, 5): 'fg_ext_pallette',
+		39: 'fg_reset', # Default text color (foreground)
 		40: 'bg_black',
 		(40, 1): 'bg_dk_grey',
 		41: 'bg_red',
@@ -220,6 +242,9 @@ class VTtext:
 		(46, 1): 'bg_lt_cyan',
 		47: 'bg_white',
 		(47, 1): 'bg_grey', # ;1 - Bold or increased intensity
+		#(48, 5): 'bg_ext_pallette',
+		49: 'bg_reset', # Default background color
+		(39, 49): 'fg_bg_reset', # Default text color (foreground); Default background color
 		}
 
 	def __init__(it, textView):
@@ -233,19 +258,26 @@ class VTtext:
 		it.logBufTags = TextBufferTags(tbf)
 		it.buffConCode = ''
 		it.proc = None
+		it.trans_rr = False
 
-	def _m(it, bfi, p1, p2):
-		if p1 is None and(p2 is None):
+
+	def _m(it, bfi, *args_in):
+		args = tuple(arg for arg in args_in if type(arg) is int)
+		_la = len(args)
+		if not(args):
 			subcode = 0
-			_dt = ''
-		elif type(p1) is int and(type(p2) is int):
-			subcode = p1, p2
-			_dt = "%i;%i" % (p1, p2)
-		elif type(p1) is int and(p2 is None):
-			subcode = p1
-			_dt = "%i" % p1
+		elif _la==1:
+			subcode = args[0]
+		elif _la==2:
+			if args[0]==0:
+				it.logBufTags.all_reset()
+				subcode = args[1]
+			else:
+				subcode = args[0], args[1]
+		#elif _la==3 and(args[0] in(38, 48)) and(args[1]==5) and(args[2]in range(0, 16)):
+			#subcode = args[0], args[2]
 		else:
-			_err("Strange Select Graphic Rendition code(s): %s;%s\n" % (str(p1), str(p2)))
+			_err("Strange Select Graphic Rendition code(s): %s\n" % str(';'.join(args)))
 			return False
 		term_code = it.dc_m.get(subcode)
 		if not(term_code):
@@ -254,20 +286,21 @@ class VTtext:
 		if not(it.logBufTags.get(term_code)):
 			_err("Unhandled tag code(no TextBufferTags.%s method)\n" % term_code)
 			return False
+		#_dt = ';'.join(args)
 		#_dbg("Handle <Esc><[|(>%sm\n" % _dt)
 		return True
 
-	def cursor(it, bfi, p1, p2, code):
+	def cursor(it, bfi, code, *args_in):
 		tbf = it.txtBuff
-		args = tuple(arg for arg in (p1, p2) if type(arg) is int)
+		args = tuple(arg for arg in args_in if type(arg) is int)
 		if not(args):
 			count = 1
 			_dt = 'default'
 		elif len(args)==1:
-			count = p1
-			_dt = "%i" % p1
+			count = args[0]
+			_dt = "%i" % count
 		else:
-			_dbg("Strange args to Move Cursor %s: %i;%i\n" % (code.capitalize(), p1, strp2))
+			_err("Strange args to Move Cursor %s: %s\n" % (code.capitalize(), str(args)))
 			return False
 		ds = {'up': '↑', 'down': '↓', 'forward': '→', 'back': '←'}[code]
 		_dbg("Handle %sx%s\n" % (ds, _dt))
@@ -302,10 +335,29 @@ class VTtext:
 		dbgReportIterPos(tbf, bfi)
 		return True
 
-	cursor_up = lambda it, bfi, p1, p2: it.cursor(bfi, p1, p2, 'up')
-	cursor_down = lambda it, bfi, p1, p2: it.cursor(bfi, p1, p2, 'down')
-	cursor_forward = lambda it, bfi, p1, p2: it.cursor(bfi, p1, p2, 'forward')
-	cursor_back = lambda it, bfi, p1, p2: it.cursor(bfi, p1, p2, 'back')
+	cursor_up = lambda it, bfi, *args_in: it.cursor(bfi, 'up', *args_in)
+	cursor_down = lambda it, bfi, *args_in: it.cursor(bfi, 'down', *args_in)
+	cursor_forward = lambda it, bfi, *args_in: it.cursor(bfi, 'forward', *args_in)
+	cursor_back = lambda it, bfi, *args_in: it.cursor(bfi, 'back', *args_in)
+
+	def get_coords(it, bfi, tbf):
+		y, h =  bfi.get_line(), tbf.get_line_count()-1
+		x, w = bfi.get_line_offset(), bfi.get_chars_in_line()-int(y<h)
+		return x, y, w, h
+
+	def cursor_yx(it, bfi, row, column):
+		if row is None:
+			row = 1
+		row -= 1 # rebase from 1 to 0
+		if column is None:
+			column = 1
+		column -= 1 # rebase from 1 to 0
+		tbf = it.txtBuff
+		x, y, w, h = it.get_coords(bfi, tbf)
+		if row>h:
+			pass
+		else:
+			pass
 
 	def clear_line(it, bfi, *args_in):
 		args = tuple(arg for arg in args_in if type(arg) is int)
@@ -314,13 +366,12 @@ class VTtext:
 			_dt = 'default'
 		elif len(args)==1 and(args[0] in range(0, 3)):
 			code = args[0]
-			_dt = "%i" % p1
+			_dt = "%i" % code
 		else:
 			_dbg("Strange args to Clear Line: %s\n" % str(args_in))
 			return False
 		tbf = it.txtBuff
-		y, h =  bfi.get_line(), tbf.get_line_count()-1
-		x, w = bfi.get_line_offset(), bfi.get_chars_in_line()-int(y<h)
+		x, y, w, h = it.get_coords(bfi, tbf)
 		cfi = bfi.copy()
 		fwd = w-x
 		if code in(0, 2) and fwd:
@@ -334,6 +385,7 @@ class VTtext:
 		tbf.delete(bfi, cfi)
 		if code==1 and (x): # 
 			tbf.insert(bfi, ' '*x)
+		return True
 
 	def clear_text(it):
 		it.logView.clear_text()
@@ -343,8 +395,7 @@ class VTtext:
 		if not(txt):
 			return
 		tbf = it.txtBuff
-		y, h =  bfi.get_line(), tbf.get_line_count()-1
-		x, w = bfi.get_line_offset(), bfi.get_chars_in_line()-int(y<h)
+		x, y, w, h = it.get_coords(bfi, tbf)
 		ln = len(txt)
 		cfi = bfi.copy()
 		if w-x and (ln):
@@ -353,7 +404,6 @@ class VTtext:
 			_dbg("insert_p::N forward:%i,len(txt):%i,→:%i/%i\n" % (forward, ln, x, w))
 			_dt = tbf.get_slice(bfi, cfi).decode('utf-8')
 			_dc = cfi.get_char()
-			#if ord(_dc):
 			_dbg("Deleting[%i]:@%s\n\t%s\n" % (len(_dt), repr(_dc), repr(_dt)))
 			tbf.delete(bfi, cfi)
 		ltg = it.logBufTags
@@ -400,6 +450,8 @@ class VTtext:
 						bfi.backward_chars(bspc)
 					_dbg("\x1b[32;1m%i\x1b[m:Backspace_B[%i/%i]\n" % (loop, bspc, n))
 				elif code=='\r':
+					if it.trans_rr and(txt[0]=='\r'):
+						txt[0]=='\n'
 					if txt_o:
 						_dbg("\x1b[32;1m%i\x1b[m:Insert_R[%i]:\n\t%s\n" % (loop, len(txt_o), repr(txt_o)))
 					x = bfi.get_line_offset()
@@ -433,16 +485,6 @@ class VTtext:
 			tbf.insert_with_tags(bfi, txt, tag)
 		else:
 			tbf.insert(bfi, txt)
-		'''
-		lsTags = it.logBufTags.lsTags
-		saveTags = list(lsTags)
-		it.logBufTags.all_reset()
-		if tag:
-			lsTags.append(tag)
-		it.asciiCtrlHandle(bfi, txt)
-		it.logBufTags.all_reset()
-		lsTags.extend(saveTags)
-		'''
 		it.chPtr = bfi.get_offset()
 
 	def escHandle(it, newTxt):
@@ -463,17 +505,20 @@ class VTtext:
 				mTermCtrl = reTermCtrl.search(newTxt)
 				if mTermCtrl:
 					ctrlB, ctrlE = mTermCtrl.span()
-					Code, p1, p2 = mTermCtrl.group('Code'),  mTermCtrl.group('p1'), mTermCtrl.group('p2')
+					Code  = mTermCtrl.group('Code')
 					newTxt = newTxt[ctrlE:]
 					select_code = it.dcCodes.get(Code)
 					if select_code and(hasattr(it, select_code)):
 						it_handle = getattr(it, select_code)
 						if callable(it_handle):
-							params = tuple(map(lambda p: int(p) if p.isdigit() else None, (p1, p2)))
+							params = tuple(map(
+								lambda p: int(p) if p.isdigit() else None, mTermCtrl.group('Params').split(';')))
 							bHandled = it_handle(bfi, *params)
 						else:
-							_err("Uhandled Console Code:<Esc>%s - VTtext.%s not callable…\n" % (
-								mTermCtrl.group('TermCtrl')[1:], select_code))
+							bHandled = False
+							_err("VTtext.%s not callable…\n" % (select_code))
+						if not(bHandled):
+							_err("Uhandled Console Code:<Esc>%s\n" % (mTermCtrl.group('TermCtrl')[1:]))
 					else:
 						_err("Unsupported Console Code:<Esc>%s\n" % mTermCtrl.group('TermCtrl')[1:])
 				else: #Esc found but not ended
@@ -500,38 +545,81 @@ class VTtext:
 			watchcall = it.ptyReceiver
 		from gobject import IO_IN as ioIN, IO_HUP as ioHUP, io_add_watch as addWatch
 		import pty, fcntl
-		from os import ttyname, fdopen as fdo, O_NDELAY as nDly
+		from os import ttyname, fdopen as fdo, O_NONBLOCK as nBlk, O_RDONLY as RdO, O_NDELAY as nDly,\
+			mkfifo as mkff, path as ph, getpid, open as oo
+		it.pid = pid =  getpid()
 		it.pty_parent_fd, it.pty_child_fd = pty.openpty()
+		_dbg("pid: %s\n" % pid)
 		_dbg("parent pty: %s\n" % ttyname(it.pty_parent_fd))
 		_dbg("child pty: %s\n" % ttyname(it.pty_child_fd))
 		it.fd = fdo(it.pty_parent_fd, 'r')
 		file_flags = fcntl.fcntl(it.fd, fcntl.F_GETFL)
 		fcntl.fcntl(it.fd, fcntl.F_SETFL, file_flags|nDly)
 		it.watchID = addWatch(it.fd, ioIN, watchcall)
+		#tmpdir = ph.expanduser('~/tmp')
+		#if not(ph.isdir(tmpdir)):
+			#tmpdir = '/tmp'
+		#ff_in_fn = it.fifo_in_fn = ph.join(tmpdir, ".%s-stdin.%i" % (ph.basename(__file__).split('.')[0], pid))
+		#ff_err_fn = it.fifo_err_fn = ph.join(tmpdir, ".%s-stderr.%i" % (ph.basename(__file__).split('.')[0], pid))
+		#_dbg("fifo in filename: %s\n" % ff_in_fn)
+		#_dbg("fifo err filename: %s\n" % ff_err_fn)
+		#mkff(ff_in_fn) # for future use to control stdin
+		#it.run = True
+		#mkff(ff_err_fn) # for future use to read stderr
+		#it.std_watch_err = oo(ff_err_fn, RdO|nBlk)
+		#from thread import start_new_thread as nt
+		#nt(it.ptyReadErr, ())
+
+
+	#def ptyReadErr(it):
+		#while it.run:
+			#data = it.std_watch_err.read()
+			#if data:
+				#_dbg("Read stderr:\n%s\n" % repr(data))
+			#slp(.5)
+		#it.std_watch_err.close()
 
 	def ptyDisconnect(it):
+		#it.run = False
+		it.kill()
 		from gobject import source_remove as unWatch
 		unWatch(it.watchID)
 		it.fd.close()
+		from os import remove as rm
+		#rm(it.fifo_err_fn)
+		#rm(it.fifo_in_fn)
 
-	def runInVT(it, cmd):
-		from subprocess import Popen as ppn
-		from time import sleep as slp
+	from subprocess import PIPE # must be there, because its needed by deafault stdin
+	def runInVT(it, cmd, envm=None, stdin=PIPE):
+		from subprocess import Popen as ppn, STDOUT
 		from shlex import split as shs
 		from os import setsid
+		from psutil import Process as pss
+		if envm is None:
+			from os import environ as env
+			envm = env.copy()
 		# drop run if busy by previous task
 		if type(it.proc) is ppn and(it.proc.poll()== None):
-			return
+			return False
 		it.proc = ppn(shs(cmd),
-			stdin=PIPE,
-			stdout=it.ui.vt.pty_child_fd,
+			env=envm,
+			#stdin=it.fifo_in_fn,
+			stdin=stdin,
+			stdout=it.pty_child_fd,
 			stderr=STDOUT, preexec_fn=setsid)
 		it.proc.children = None
 		try:
-			p = Process(it.proc.pid)
+			p = pss(it.proc.pid)
 			it.proc.children = p.get_children(recursive=True)
 		except:
 			pass
+		#it.std_reply = open(it.fifo_in_fn, 'wb')
 		while it.proc.poll()==None: # poll()==None means still running
 			slp(.5)
+		#it.std_reply.close()
 		it.proc = None
+		return True
+
+	def kill(it):
+		if not(it.proc is None):
+			it.proc.terminate()

@@ -57,9 +57,10 @@ docs/_build/
 target/
 
 # Config files
-basketVideo*.conf
-basketVideo.ini
+*.conf
+*.ini
 
 #other staff
-.oldtxt
+*old*
+*tmp*
 update

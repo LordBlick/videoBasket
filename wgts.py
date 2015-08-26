@@ -287,9 +287,11 @@ def TreeTxtColumn(txtLabel, colWidth, nCol, lsRendProp, fontDesc=None):
 	if colWidth:
 		tvc.set_fixed_width(colWidth)
 	if fontDesc:
+		f = fontDesc
 		ttcLabel = gtk.Label(txtLabel)
 		ttcLabel.modify_font(fontDesc)
 		tvc.set_widget(ttcLabel)
+		ttcLabel.show()
 	lscrtxt = []
 	for n in nCol:
 		crtxt = gtk.CellRendererText()

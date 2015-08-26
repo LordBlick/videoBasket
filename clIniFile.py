@@ -162,7 +162,8 @@ class Section(xlist):
 	def write_out(it):
 		out = "[%s]\n" % it.name
 		for _set in it:
-			out += '='.join(_set)+'\n'
+			if _set[1]:
+				out += '='.join(_set)+'\n'
 		return out+'\n'
 
 	def write_out_old_cfg(it):

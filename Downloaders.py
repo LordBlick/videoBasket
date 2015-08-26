@@ -73,7 +73,7 @@ class YoutubeDL:
 			if info.has_key('title') and info.has_key('url_encoded_fmt_stream_map'):
 				it.title = info['title'][0]
 				_dbg("Downloading %s\n" % it.title)
-				dst_fn = "%s/%s-%s.mp4" % (it.dst_dn, it.title, vidid)
+				dst_fn = "%s/%s-%s.mp4" % (it.dst_dn, it.title.replace('/', '_'), vidid)
 				stream_map = info['url_encoded_fmt_stream_map'][0]
 				for v_info in stream_map.split(','):
 					item = parse_qs(v_info)

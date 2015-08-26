@@ -215,82 +215,69 @@ class videoBasket:
 		from time import sleep
 		from os import chdir as cd,  getcwd as pwd, environ as env, setsid
 		from psutil import Process
-		if mn.yt.iddle and(not(mn.last_downloading)) and(mn.procTask == None or mn.procTask.poll() != None): # poll()==None means still running
-			ui = mn.ui
-			_pwd = pwd()
+		ui = mn.ui
+		_pwd = pwd()
+		gtk.threads_enter()
+		_dbg("Thread pass#0\n")
+		try:
+			lsUrls = ui.tvUrls.get_model()
+		finally:
+			gtk.threads_leave()
+		_dbg("Thread pass#1\n")
+		while len(lsUrls):
+			url = Engine = ''
+			Iter0 = None
 			gtk.threads_enter()
-			_dbg("Thread pass#0\n")
 			try:
-				lsUrls = ui.tvUrls.get_model()
+				Iter0 = lsUrls.get_iter_first()
+				Engine, url, video_id = lsUrls.get(Iter0, 0, 1, 3)
+				resolutionLimit = ui.lsLimit[ui.cbLimit.get_active()][1]
 			finally:
 				gtk.threads_leave()
-			_dbg("Thread pass#1\n")
-			while len(lsUrls):
-				url = Engine = ''
-				Iter0 = None
-				gtk.threads_enter()
-				try:
-					Iter0 = lsUrls.get_iter_first()
-					Engine, url, video_id = lsUrls.get(Iter0, 0, 1, 3)
-					resolutionLimit = ui.lsLimit[ui.cbLimit.get_active()][1]
-				finally:
-					gtk.threads_leave()
-				_dbg("Thread pass#2\n")
-				if Engine=='Youtube' and(ui.checkOwnYTdl.get_active()) and(video_id):
-					repeat = True
-					while repeat:
-						while mn.yt.downloading or(mn.last_downloading):
-							sleep(2)
-						mn.yt.dst_dn = mn.cfg['Main']['DestinationDirName']
-						repeat = mn.yt.go(video_id, int(resolutionLimit))
-				elif url:
-					cmd = ''
-					if resolutionLimit and(not(Engine in('Direct',))):
-						cmd = 'youtube-dl --verbose '
-						retcode, output, stderr = mn.call("youtube-dl -F '%s'" % url)
-						if retcode==0:
-							lines = list(reversed(map(lambda s: s.strip(), output.splitlines())))
-							while True:
-								if not(len(lines)):
-									break
-								if mn.reResInfoHead.match(lines[-1]):
-									lines.pop()
-									break
+			_dbg("Thread pass#2\n")
+			if Engine=='Youtube' and(ui.checkOwnYTdl.get_active()) and(video_id):
+				repeat = True
+				while repeat:
+					while mn.yt.downloading or(mn.last_downloading):
+						sleep(2)
+					mn.yt.dst_dn = mn.cfg['Main']['DestinationDirName']
+					repeat = mn.yt.go(video_id, int(resolutionLimit))
+			elif url:
+				cmd = ''
+				if resolutionLimit and(not(Engine in('Direct',))):
+					cmd = 'youtube-dl --verbose '
+					retcode, output, stderr = mn.call("youtube-dl -F '%s'" % url)
+					if retcode==0:
+						lines = list(reversed(map(lambda s: s.strip(), output.splitlines())))
+						while True:
+							if not(len(lines)):
+								break
+							if mn.reResInfoHead.match(lines[-1]):
 								lines.pop()
-							lines = sorted([line for line in map(lambda s: s.split(None, 3), lines)
-								if mn.extractResolution(line[2])<=resolutionLimit],
-								key=lambda x: (mn.extractResolution(x[2]), -(int(x[0]) if x[0].isdigit() else 40)), reverse=True)
-							_dbg("limit: %i\nlines:\n%s" % (resolutionLimit, '\n'.join([' | '.join(line) for line in lines])+'\n'))
-							cmd += "-f %s " % lines[0][0]
-							cmd += "'%s'" % url
-					else:
-						cmd = ("youtube-dl --verbose '%s'", "lftp -c pget '%s'")[Engine in('Direct',)] % url
-					cd(mn.cfg['Main']['DestinationDirName'])
-					_tp("> %s\n" % cmd)
-					if cmd:
-						mn.procTask = Popen(shsp(cmd),
-							stderr=PIPE,
-							stdout=mn.pty_child_fd, preexec_fn=setsid)
-						mn.procTask.children = None
-						mn.procTask.diry = dir(mn.procTask)
-						try:
-							p = Process(mn.procTask.pid)
-							mn.procTask.children = p.get_children(recursive=True)
-						except:
-							pass
-						while mn.procTask.poll() == None: # poll()==None means still running
-							sleep(.5)
-					_tp("Done: %s\n" % cmd)
-				gtk.threads_enter()
-				try:
-					if Iter0 is not None:
-						lsUrls.remove(Iter0)
-						Iter0 = None
-				finally:
-					gtk.threads_leave()
-			mn.procTask = None
-			cd(_pwd)
-			_dbg("Thread exit.\n")
+								break
+							lines.pop()
+						lines = sorted([line for line in map(lambda s: s.split(None, 3), lines)
+							if mn.extractResolution(line[2])<=resolutionLimit],
+							key=lambda x: (mn.extractResolution(x[2]), -(int(x[0]) if x[0].isdigit() else 40)), reverse=True)
+						_dbg("limit: %i\nlines:\n%s" % (resolutionLimit, '\n'.join([' | '.join(line) for line in lines])+'\n'))
+						cmd += "-f %s " % lines[0][0]
+						cmd += "'%s'" % url
+				else:
+					cmd = ("youtube-dl --verbose '%s'", "lftp -c pget '%s'")[Engine in('Direct',)] % url
+				cd(mn.cfg['Main']['DestinationDirName'])
+				_tp("> %s\n" % cmd)
+				if cmd:
+					ui.vt.runInVT(cmd)
+				_tp("Done: %s\n" % cmd)
+			gtk.threads_enter()
+			try:
+				if Iter0 is not None:
+					lsUrls.remove(Iter0)
+					Iter0 = None
+			finally:
+				gtk.threads_leave()
+		cd(_pwd)
+		_dbg("Thread exit.\n")
 
 	def call(mn, cmd):
 		proc = Popen(
@@ -311,7 +298,7 @@ class videoBasket:
 			mn.cfg['Main']['lastDropedURLs'] = url
 			lsUrls = ui.tvUrls.get_model()
 			lsUrls.append( (Engine, url, "%s: '%s'" % (Engine, url), video_id) )
-			if mn.yt.iddle and(not(mn.last_downloading)) and(mn.procTask == None or(mn.procTask.poll()!=None)):
+			if mn.yt.iddle and(not(mn.last_downloading)) and(ui.vt.proc == None or(ui.vt.proc.poll()!=None)):
 				mn.appStartThread(mn.downloadThread)
 		else:
 			mn.cfg['Main'].remove('lastDropedURLs')
@@ -360,25 +347,16 @@ class videoBasket:
 		mn.reDailyURLvid = re.compile('.*((dai.ly)|(dailymotion.com/video))/(?P<WatchId>\w+)', re.I | re.U)
 		mn.reDirectMedia = re.compile('(?P<Url>http://.*\..*/.*\.mp[1-4])', re.I | re.U)
 		mn.reResInfoHead = re.compile('format\s+code\s+extension\s+resolution\s+note', re.I | re.U)
-		from gobject import IO_IN as ioIN, IO_HUP as ioHUP, io_add_watch as addWatch,  timeout_add as addTick
-		import pty, fcntl
-		from os import fdopen as fdo, O_NDELAY as nDly
-		mn.pty_parent_fd, mn.pty_child_fd = pty.openpty()
-		mn.fd = fdo(mn.pty_parent_fd, 'r')
-		file_flags = fcntl.fcntl(mn.fd, fcntl.F_GETFL)
-		fcntl.fcntl(mn.fd, fcntl.F_SETFL, file_flags|nDly)
-		mn.bufRN = ''
-		mn.txtBfSchFlags = gtk.TEXT_SEARCH_TEXT_ONLY | gtk.TEXT_SEARCH_VISIBLE_ONLY
+		ui.vt.ptyConnect()
+		from gobject import timeout_add as addTick
 		mn.last_downloading = False
 		mn.tickID = addTick(1000, mn.thread1s)
-		mn.procTask = None
-		mn.watchID = addWatch(mn.fd, ioIN, ui.vt.logWrite)
 		mn.yt = YoutubeDL(logger=_tp) #, rundir=ui.rundir
 
 	def appStop(mn):
 		mn.appCfgStore()
 		from gobject import source_remove as unWatch
-		unWatch(mn.watchID)
+		mn.ui.vt.ptyDisconnect()
 		unWatch(mn.tickID)
 
 	def Exit(mn):
