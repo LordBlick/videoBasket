@@ -27,7 +27,7 @@
  51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 '''
 
-from os import path as ph, getcwd as pwd, remove as rm, rename as mv
+from os import getcwd as pwd, remove as rm, rename as mv
 import re
 from subprocess import Popen, PIPE, STDOUT
 from shlex import split as shsp
@@ -41,6 +41,7 @@ lsTargets = txtTargets.split(' ')
 enumTargets = range(80, 80+len(lsTargets))
 lsDragAndDrop = [(s, 0, n) for s, n in zip(lsTargets, enumTargets)]
 from uiVideoBasket import gtk, wg
+ph, tmp_dn = wg.ph, wg.H+'/tmp'
 #_dbg = wg._dbg
 import clIniFile
 clIniFile.dbg = True
@@ -78,6 +79,7 @@ class videoBasket:
 			ui.lsLimit.append( ("%ip"% res_limit, res_limit) )
 		ui.cbLimit.connect("changed", mn.appChangeLimit)
 		ui.buttonReload.connect("clicked", lambda xargs: mn.appReload())
+		ui.buttonDstDir.connect("clicked", lambda xargs: mn.appDstDir())
 		ui.buttonClear.connect("clicked", lambda xargs: mn.appClear())
 		ui.buttonExit.connect("clicked", lambda xargs: mn.Exit())
 
@@ -187,7 +189,21 @@ class videoBasket:
 			p_todo = 1.-p_done
 			txtParamDL = ''
 			if p_done and(round(p_todo, 1)):
-				txtParamDL += ", ETA:%.1fs" % (lifetime*p_todo/p_done)
+				eta_s = lifetime*p_todo/p_done
+				eta_m, eta_s = divmod(eta_s, 60)
+				eta_h, eta_m = divmod(eta_m, 60)
+				eta_d, eta_h = divmod(eta_h, 24)
+				etas = []
+				etas.append(', ETA:')
+				if eta_d:
+					etas.append("%idays" % eta_d)
+				if eta_h:
+					etas.append("%ih" % eta_h)
+				if eta_m:
+					etas.append("%imin." % eta_m)
+				if eta_s:
+					etas.append("%.1fs." % eta_s)
+				txtParamDL += ', '.join(etas)
 			if yt.downloading:
 				dps = done_per_s = float(done)/lifetime
 			else:
@@ -316,6 +332,21 @@ class videoBasket:
 		if mn.cfg['Main'].has_key('lastDropedURLs'):
 			mn.appendURL(mn.cfg['Main']['lastDropedURLs'])
 
+	def appSetDstVis(mn):
+		ui = mn.ui
+		dst_dn = hh(mn.cfg['Main']['DestinationDirName'])
+		ui.buttonDstDir.set_tooltip_text(dst_dn)
+		ui.buttonDstDir.set_label("→Dir:'%s'" % dst_dn)
+
+	def appDstDir(mn):
+		dst_dn = mn.cfg['Main']['DestinationDirName']
+		last_dn = dst_dn if ph.isdir(dst_dn) else tmp_dn
+		new_dn = wg.dialogChooseFile(parent=mn.ui.mainWindow, act='dir_open',
+			startDir=last_dn, title="Select directory to download in", bShowHidden=True)
+		if new_dn:
+			mn.cfg['Main']['DestinationDirName'] = new_dn
+		mn.appSetDstVis()
+
 	def appStart(mn):
 		ui = mn.ui
 		mn.appCfgLoad()
@@ -333,7 +364,8 @@ class videoBasket:
 		ui.buttonReload.set_sensitive(bool(mn.cfg['Main']['lastDropedURLs']))
 		dst_dn = mn.cfg['Main']['DestinationDirName']
 		if dst_dn is None or(not(ph.isdir(dst_dn))):
-			mn.cfg['Main']['DestinationDirName'] = ph.expanduser('~/tmp')
+			mn.cfg['Main']['DestinationDirName'] = tmp_dn
+		mn.appSetDstVis()
 		if mn.cfg['Main']['ownYTdownloader'] is None:
 			mn.cfg['Main']['ownYTdownloader'] = '0'
 		ui.checkOwnYTdl.set_active(int((mn.cfg['Main']['ownYTdownloader'])))

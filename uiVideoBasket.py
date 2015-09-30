@@ -91,13 +91,14 @@ class videoBasketUI:
 
 		ui.logoBigPixbuf = gtk.gdk.pixbuf_new_from_file(runpath+"/pic/video.svg")
 		gtk.window_set_default_icon_list(ui.logoBigPixbuf, )
-		ui.imageLogo = gtk.Image()
+		ui.imageLogo = wg.Image(mfm, 0, 0)
 		ui.imageLogo.set_from_pixbuf(ui.logoBigPixbuf)
-		mfm.put(ui.imageLogo, 0, 0)
 
 		ui.buttonReload = wg.Butt(None, mfm, 0, 0, 30, stockID=gtk.STOCK_REFRESH) #"Read File..."
 
-		ui.buttonClear = wg.Butt("Clear", mfm, 0,  0, 50)
+		ui.buttonDstDir = wg.Butt("→Dir:", mfm, 0,  0, 80)
+
+		ui.buttonClear = wg.Butt("Clear", mfm, 0,  0, 35)
 
 		ui.buttonExit = wg.Butt("Exit (Ctrl+Q)", mfm, 0, 0, 80)
 		ui.buttonExit.add_accelerator("clicked", accGroup, ord('Q'),
@@ -131,9 +132,11 @@ class videoBasketUI:
 			ui.labelLimit.move(w-165, y)
 			ui.cbLimit.move(w-80, y)
 			y += 30
-			ui.mainFrame.move(ui.imageLogo, 0, y-2)
+			ui.imageLogo.move(0, y-2)
 			ui.buttonReload.move(50, y)
-			ui.buttonClear.move(w-145, y)
+			ui.buttonDstDir.size(w-220, H)
+			ui.buttonDstDir.move(85, y)
+			ui.buttonClear.move(w-130, y)
 			ui.buttonExit.move(w-90, y)
 			return True
 

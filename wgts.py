@@ -31,10 +31,10 @@ import gtk, pango
 
 dbg = False
 
+from os import path as ph
+H = ph.expanduser('~') # Home dir
+hh = lambda s: s.replace(H, '~')
 if dbg:
-	from os import path as ph
-	H = ph.expanduser('~') # Home dir
-	hh = lambda s: s.replace(H, '~')
 	from sys import stdout as sto
 
 def _dbg(_str):
@@ -307,3 +307,35 @@ def TreeTxtColumn(txtLabel, colWidth, nCol, lsRendProp, fontDesc=None):
 				tvc.set_cell_data_func(crtxt, n[0], n[1:])
 		lscrtxt.append(crtxt)
 	return tvc, lscrtxt
+
+def dialogChooseFile(parent=None, startDir=None, startFile=None, filters=None, title='Select a file...', act='file_open', bShowHidden=False):
+	action = {
+		'file_open': gtk.FILE_CHOOSER_ACTION_OPEN,
+		'file_save': gtk.FILE_CHOOSER_ACTION_SAVE,
+		'dir_open': gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+		'dir_create': gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER,
+		}[act]
+	hDialog = gtk.FileChooserDialog(title=title, parent=parent, action=action,
+		buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK) )
+	if filters:
+		for fnFilter in filters:
+			hDialog.add_filter(fnFilter)
+		allFilter = gtk.FileFilter()
+		allFilter.set_name("All files (*.*)")
+		allFilter.add_pattern("*")
+		hDialog.add_filter(allFilter)
+	hDialog.set_default_response(gtk.RESPONSE_OK)
+	hDialog.set_show_hidden(bShowHidden)
+	if startDir:
+		hDialog.set_current_folder(startDir)
+	if startFile:
+		if act=='file_save':
+			hDialog.set_current_name(startFile)
+		elif act=='file_open':
+			hDialog.set_filename(startFile)
+	respFileName = hDialog.run()
+	fileName = None
+	if respFileName==gtk.RESPONSE_OK:
+		fileName = hDialog.get_filename()
+	hDialog.destroy()
+	return fileName
